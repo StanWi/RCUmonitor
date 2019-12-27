@@ -1,11 +1,13 @@
+#NoTrayIcon
+
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_icon=img\rcu.ico
 #AutoIt3Wrapper_outfile=rcu.exe
+#AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_Comment=for support mail to:
 #AutoIt3Wrapper_Res_Description=Microtech RCU-1 (Ethernet)
-#AutoIt3Wrapper_Res_Fileversion=0.0.0.18
+#AutoIt3Wrapper_Res_Fileversion=0.0.0.19
 #AutoIt3Wrapper_Res_LegalCopyright=
-#AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Run_After=ResHacker.exe -delete %out%, %out%, DIALOG, 1000,
 #AutoIt3Wrapper_Run_After=ResHacker.exe -delete %out%, %out%, MENU, 166,
 #AutoIt3Wrapper_Run_After=ResHacker.exe -add %out%, %out%, img\logo.bmp, bitmap, LOGO_BMP, 0
@@ -27,7 +29,6 @@ If @YEAR >= $licYear Then
 	EndIf
 EndIf
 
-;#NoTrayIcon
 #include <GUIConstantsEx.au3>
 #include <WindowsConstants.au3>
 #include <StaticConstants.au3>
@@ -37,7 +38,6 @@ EndIf
 #include <GuiListView.au3>
 #include <Array.au3>
 #include <string.au3>
-#include <resources.au3>
 
 ;=====External Files=====
 $fileOptions = @ScriptDir & "/options.ini"
@@ -74,14 +74,10 @@ EndSelect
 ;===============
 
 $programmName = "Microtech RCU-1 (Ethernet)" ;header
-$loadWin = GUICreate($programmName, 413, 137, -1, -1, $WS_POPUP)
-$picLogo = GUICtrlCreatePic("", 0, 0, 413, 77)
-_ResourceSetImageToCtrl($picLogo, "LOGO_BMP", $RT_BITMAP)
-$hBmpLogo = _ResourceGet("LOGO_BMP", $RT_BITMAP)
-_SetBitmapToCtrl($picLogo, $hBmpLogo)
+$loadWin = GUICreate($programmName, 297, 60, -1, -1, $WS_POPUP)
 GUISetIcon($fileIcon)
-$loadPro = GUICtrlCreateProgress(10, 87, 393, 18)
-$loadLab = GUICtrlCreateLabel("Загрузка данных...", 10, 113, 393, 20, $SS_CENTER)
+$loadPro = GUICtrlCreateProgress(10, 10, 277, 18)
+$loadLab = GUICtrlCreateLabel("Загрузка данных...", 10, 35, 277, 20, $SS_CENTER)
 GUISetState(@SW_SHOW, $loadWin)
 GUICtrlSetData($loadPro, 0)
 
@@ -309,8 +305,16 @@ GUICtrlSetResizing(-1, 772)
 If $winz[2] = 0 Then stateStatusBar($GUI_HIDE)
 ;===================
 
-;=====Обновление Списка аварий=====
+;=====Обновление Списка аварий===== + Индикация
 $dateEvents = FileGetTime($fileEvents) ;время последнего изменения Списка аварий
+$dateNetwork = FileGetTime($fileNetwork) ;время последнего изменения Данных о сети
+Dim $alarm_rcu[$COM[0]][20]
+For $i = 0 To $COM[0] - 1
+	For $j = 0 To 19
+		$alarm_rcu[$i][$j] = 0
+	Next
+Next
+$active_rcu = 0
 
 ;=====SetData=====
 $timer = TimerInit()
@@ -326,10 +330,12 @@ GUICtrlDelete($loadWin)
 
 GUISetState(@SW_SHOW, $mainWin)
 If $winz[0] = 1 Then GUISetState(@SW_MAXIMIZE)
-While 1
+While 1 ;MainLoopStart
 	$sec = @SEC
 	$msg = GUIGetMsg()
 	$newEvents = FileGetTime($fileEvents)
+	$newNetwork = FileGetTime($fileNetwork)
+	$eventNetwork = 0 ;Флаг отсутствя изменений сети
 	Select
 		;=====Обновление Списка аварий=====
 		Case $newEvents[3] <> $dateEvents[3] Or $newEvents[4] <> $dateEvents[4] Or $newEvents[5] <> $dateEvents[5]
@@ -346,7 +352,10 @@ While 1
 				GUICtrlSetData($statusBarAlarm, $nList & " ")
 				$nListReal = $nListNew
 			EndIf
-		Case $msg = $GUI_EVENT_CLOSE
+		Case $newNetwork[3] <> $dateNetwork[3] Or $newNetwork[4] <> $dateNetwork[4] Or $newNetwork[5] <> $dateNetwork[5]
+			$dateNetwork = $newNetwork
+			$eventNetwork = 1 ;Флаг наличия изменений сети
+		Case $msg = $GUI_EVENT_CLOSE Or $msg = $menuFileExit
 			close()
 			ExitLoop
 		Case $msg = $menuViewToolBar
@@ -454,9 +463,6 @@ While 1
 				EndIf
 			EndIf
 			;=====Menu=====
-		Case $msg = $menuFileExit
-			close()
-			ExitLoop
 		Case $msg = $menuServicePing
 			menuServicePing()
 		Case $msg = $menuServiceRefreshAll
@@ -493,17 +499,20 @@ While 1
 			;=====ToolBar=====
 		Case $msg = $toolBarBtn1 Or $msg = $menuServiceMonitoring
 			If $monitoring = 1 Then
+				IniWrite($fileOptions, "main", "auto", "0")
 				$monitoring = 0
 				GUICtrlSetState($menuServiceMonitoring, $GUI_UNCHECKED)
 				GUICtrlSetData($toolBarBtn1, ">")
 				GUICtrlSetBkColor($toolBarBtn1, 0xFF0000)
 			Else
+				IniWrite($fileOptions, "main", "auto", "1")
 				GUICtrlSetState($menuServiceMonitoring, $GUI_CHECKED)
 				GUICtrlSetData($toolBarBtn1, "o")
 				$monitoring = 1
 				GUICtrlSetBkColor($toolBarBtn1, 0x00FF00)
+				Run(@ScriptDir & "/rcumonitor.exe")
 			EndIf
-			ststusBarState()
+			statusBarState()
 		Case $msg = $toolBarBtn2
 			For $z = 0 To $COM[0] - 1
 				GUICtrlSetState($territory[$z], $GUI_EXPAND)
@@ -566,6 +575,7 @@ While 1
 						setRcu($i)
 				EndSelect
 				$treeLevel = 1
+				$active_rcu = $i
 			Case $msg = $territoryMenuAuto[$i]
 				If $treeLevel = 1 Then GUICtrlSetState($territory[$i], $GUI_FOCUS)
 				If $auto[$i] <> 1 Then
@@ -622,6 +632,24 @@ While 1
 				stateRcu($GUI_SHOW)
 				setRcu($i)
 				$treeLevel = 1
+			Case $eventNetwork = 1
+				$tempNetwork = comData(IniRead($fileNetwork, $COM[$i + 1], "temp", "52454D4F54450D0A"))
+				$tpuuNetwork = comData(IniRead($fileNetwork, $COM[$i + 1], "tpuu", "52454D4F54450D0A"))
+				If $tempNetwork <> "N/A" And $tpuuNetwork <> "N/A" And $tempNetwork >= $tpuuNetwork And $alarm_rcu[$i][0] = 0 Then
+					GUICtrlSetColor($territory[$i], 0xFF0000)
+					GUICtrlSetImage($mapIcon[$i], $fileMapIconCritical)
+					newEvent($name[$i] & " (" & $COM[$i + 1] & ")|Повышенная температура УУ")
+					$alarm_rcu[$i][0] = 1
+					If $active_rcu = $i Then setRcu($i)
+				ElseIf $tempNetwork <> "N/A" And $tpuuNetwork <> "N/A" And $tempNetwork < $tpuuNetwork And $alarm_rcu[$i][0] = 1 Then
+					newEvent($name[$i] & " (" & $COM[$i + 1] & ")|Температура УУ в норме")
+					$alarm_rcu[$i][0] = 0
+					setMapNormal($i)
+					If $active_rcu = $i Then setRcu($i)
+				EndIf
+				If GUICtrlRead($rcuTempTP) <> $tempNetwork And $active_rcu = $i Then
+					GUICtrlSetData($rcuTempTP, $tempNetwork)
+				EndIf
 		EndSelect
 		For $j = 1 To 31
 			Select
@@ -642,30 +670,21 @@ While 1
 			EndSelect
 		Next
 	Next
-	If $sec <> @SEC Then
+	If $sec <> @SEC Then ;Время работы
 		GUICtrlSetData($statusBarTimer, timer($timer))
 	EndIf
-WEnd
+WEnd ;MainLoopEnd
 GUIDelete()
 Exit
 
-;~~~~~~~~~~~~~~~~~~~
-;~~~~~ ToolBar ~~~~~
-;~~~~~~~~~~~~~~~~~~~
-
-Func stateToolBar($state)
+Func stateToolBar($state)    ;Состояние "Панели управления"
 	GUICtrlSetState($toolBarBtn1, $state)
 	GUICtrlSetState($toolBarLine1, $state)
 	GUICtrlSetState($toolBarBtn2, $state)
 	GUICtrlSetState($toolBarBtn3, $state)
 	GUICtrlSetState($toolBarLine, $state)
 EndFunc   ;==>stateToolBar
-
-;~~~~~~~~~~~~~~~~
-;~~~~~ Ping ~~~~~
-;~~~~~~~~~~~~~~~~
-
-Func menuServicePing() ;Меню -> Сервис -> Пинг...
+Func menuServicePing()        ;Меню -> Сервис -> Пинг...
 	GUICtrlSetData($statusBarState, "Пинг")
 	Dim $ping[$COM[0]]
 	$win = WinGetPos($programmName)
@@ -714,14 +733,9 @@ Func menuServicePing() ;Меню -> Сервис -> Пинг...
 		Next
 	WEnd
 	GUIDelete()
-	ststusBarState()
+	statusBarState()
 EndFunc   ;==>menuServicePing
-
-;~~~~~~~~~~~~~~~~~~~
-;~~~~~ Refresh ~~~~~
-;~~~~~~~~~~~~~~~~~~~
-
-Func rcuRefresh($i)
+Func rcuRefresh($i)            ;Refresh RCU
 	GUICtrlSetState($territory[$i], $GUI_FOCUS)
 	GUICtrlSetData($statusBarState, "Обновление данных УУ...")
 	GUICtrlSetColor($rcuInfoID, 0x808080)
@@ -779,10 +793,9 @@ Func rcuRefresh($i)
 	GUICtrlSetColor($rcuInfoSN, 0x000000)
 	GUICtrlSetColor($rcuTempTP, 0x000000)
 	GUICtrlSetColor($rcuTempLM, 0x000000)
-	ststusBarState()
+	statusBarState()
 EndFunc   ;==>rcuRefresh
-
-Func unitRefresh($i)
+Func unitRefresh($i)        ;Refresh Unit
 	GUICtrlSetState($territory[$i], $GUI_FOCUS)
 	GUICtrlSetData($statusBarState, "Обновление списка оборудования...")
 	$portState = comConnect($i)
@@ -874,14 +887,9 @@ Func unitRefresh($i)
 			GUICtrlSetState($territory[$i], $GUI_FOCUS)
 		EndIf
 	EndIf
-	ststusBarState()
+	statusBarState()
 EndFunc   ;==>unitRefresh
-
-;~~~~~~~~~~~~~~~~~
-;~~~~~ About ~~~~~
-;~~~~~~~~~~~~~~~~~
-
-Func menuHelpAbout() ;Меню -> Справка -> О программе
+Func menuHelpAbout()         ;Меню -> Справка -> О программе
 	GUICtrlSetData($statusBarState, "О программе")
 	$win = WinGetPos($programmName)
 	$aboutWinW = 419
@@ -893,15 +901,10 @@ Func menuHelpAbout() ;Меню -> Справка -> О программе
 	If $aboutWinY < 0 Then $aboutWinY = 0
 	If $aboutWinY + $aboutWinH > @DesktopHeight Then $aboutWinY = @DesktopHeight - $aboutWinH
 	$aboutWin = GUICreate("О программе """ & $programmName & """", $aboutWinW, $aboutWinH, $aboutWinX, $aboutWinY, 0x00000000, 0x00000000, $mainWin)
-	
-	$picLogo = GUICtrlCreatePic("", 0, 0, 413, 77)
-	_ResourceSetImageToCtrl($picLogo, "LOGO_BMP", $RT_BITMAP)
-	$hBmpLogo = _ResourceGet("LOGO_BMP", $RT_BITMAP)
-	_SetBitmapToCtrl($picLogo, $hBmpLogo)
-	
+	GUICtrlCreatePic($fileAboutLogo, 0, 0, 413, 77)
 	GUICtrlCreateIcon($fileIcon, -1, 11, 90)
 	GUICtrlCreateLabel($programmName, 52, 89, 133, 15)
-	GUICtrlCreateLabel("Версия 0.0.0.18 (beta)", 52, 106, 93, 15)
+	GUICtrlCreateLabel("Версия 0.0.0.19", 52, 106, 93, 15)
 	GUICtrlCreateLabel("ООО , 2009", 52, 122, 176, 15)
 	GUICtrlCreateLabel("mail-to: ", 52, 138, 126, 15)
 	GUICtrlSetColor(-1, 0x0000FF)
@@ -926,22 +929,16 @@ Func menuHelpAbout() ;Меню -> Справка -> О программе
 		EndIf
 	WEnd
 	GUIDelete()
-	ststusBarState()
+	statusBarState()
 EndFunc   ;==>menuHelpAbout
-
-;~~~~~~~~~~~~~~~~
 ;~~~~~ Tree ~~~~~
-;~~~~~~~~~~~~~~~~
-
 Func tree($dy)
 	$maintreeview = GUICtrlCreateTreeView(0, 32 + $dy, ($win[2] - $dwinw) - $mapw - 6, $maph + 4, BitOR($TVS_HASBUTTONS, $TVS_HASLINES, $TVS_DISABLEDRAGDROP, $TVS_SHOWSELALWAYS), $WS_EX_CLIENTEDGE)
 	GUICtrlSetResizing(-1, 550)
 EndFunc   ;==>tree
-
 Func posTree($dy)
 	GUICtrlSetPos($maintreeview, 0, 32 + $dy, ($win[2] - $dwinw) - $mapw - 6, $maph + 4)
 EndFunc   ;==>posTree
-
 Func setTree()
 	$treeview = GUICtrlCreateTreeViewItem(IniRead($fileOptions, "main", "name", "Без имени"), $maintreeview)
 	Dim $territory[$COM[0]], $territoryMenu[$COM[0]], $territoryMenuAuto[$COM[0]], $territoryMenuRefresh[$COM[0]], $territoryMenuData[$COM[0]]
@@ -970,12 +967,10 @@ Func setTree()
 	Next
 	GUICtrlSetState($treeview, BitOR($GUI_EXPAND, $GUI_DEFBUTTON))
 EndFunc   ;==>setTree
-
 Func delTree()
 	GUICtrlDelete($maintreeview)
 EndFunc   ;==>delTree
-
-;~~~~~~~~~~~~~~~
+;~~~~~ Map ~~~~~
 ;~~~~~ Map ~~~~~
 ;~~~~~~~~~~~~~~~
 
@@ -996,7 +991,6 @@ Func map($dy)
 		EndIf
 	Next
 EndFunc   ;==>map
-
 Func stateMap($state)
 	GUICtrlSetState($mapLable, $state)
 	GUICtrlSetState($mapPic, $state)
@@ -1004,7 +998,6 @@ Func stateMap($state)
 		GUICtrlSetState($mapIcon[$i], $state)
 	Next
 EndFunc   ;==>stateMap
-
 Func posMap($dy)                ;x								y			w			h
 	GUICtrlSetPos($mapLable, ($win[2] - $dwinw) - $mapw - 4, 32 + $dy, $mapw + 4, $maph + 4)
 	GUICtrlSetPos($mapPic, ($win[2] - $dwinw) - $mapw - 2, 34 + $dy, $mapw, $maph)
@@ -1012,7 +1005,6 @@ Func posMap($dy)                ;x								y			w			h
 		GUICtrlSetPos($mapIcon[$i], $win[2] - $mapw + $posIcon[$i][0] - 10, 34 + $dy + $posIcon[$i][1], 20, 20)
 	Next
 EndFunc   ;==>posMap
-
 Func delMap()
 	For $i = 0 To $COM[0] - 1
 		GUICtrlDelete($mapIcon[$i])
@@ -1020,11 +1012,20 @@ Func delMap()
 	GUICtrlDelete($mapPic)
 	GUICtrlDelete($mapLable)
 EndFunc   ;==>delMap
-
-;~~~~~~~~~~~~~~~~~
+Func setMapNormal($i) ;Установка зеленого индикатора
+	$k = 0
+	For $j = 0 To 19
+		If $alarm_rcu[$i][$j] = 1 Then
+			$k = 1
+			ExitLoop
+		EndIf
+	Next
+	If $k = 0 Then
+		GUICtrlSetColor($territory[$i], 0x000000)
+		GUICtrlSetImage($mapIcon[$i], $fileMapIconNormal)
+	EndIf
+EndFunc   ;==>setMapNormal
 ;~~~~~ RCU-1 ~~~~~
-;~~~~~~~~~~~~~~~~~
-
 Func stateRcu($state)
 	GUICtrlSetState($rcuGroup, $state)
 	GUICtrlSetState($rcuInfo, $state)
@@ -1041,7 +1042,6 @@ Func stateRcu($state)
 	GUICtrlSetState($rcuAutoOn, $state)
 	GUICtrlSetState($rcuAutoOff, $state)
 EndFunc   ;==>stateRcu
-
 Func posRcu($dy)                    ;x						y				w			h
 	GUICtrlSetPos($rcuGroup, $win[2] - $mapw - 12, 34 + $dy, $mapw + 4, $maph + 2)
 	;Информация о УУ
@@ -1063,7 +1063,6 @@ Func posRcu($dy)                    ;x						y				w			h
 	;Прогресс
 	GUICtrlSetPos($rcuProgress, $win[2] - $mapw - 4, $maph + 2 + $dy, $mapw - 12, 18)
 EndFunc   ;==>posRcu
-
 Func setRcu($i)
 	GUICtrlSetData($rcuGroup, $name[$i] & " (" & $COM[$i + 1] & ")")
 	GUICtrlSetData($rcuInfoID, comData(IniRead($fileNetwork, $COM[$i + 1], "iduu", "52454D4F54450D0A")))
@@ -1082,11 +1081,7 @@ Func setRcu($i)
 	EndIf
 	$port = $i
 EndFunc   ;==>setRcu
-
-;~~~~~~~~~~~~~~~~
 ;~~~~~ Unit ~~~~~
-;~~~~~~~~~~~~~~~~
-
 Func stateUni($state)
 	GUICtrlSetState($uniGroup, $state)
 	GUICtrlSetState($uniInfo, $state)
@@ -1098,7 +1093,6 @@ Func stateUni($state)
 	GUICtrlSetState($uniInfoDE, $state)
 	GUICtrlSetState($uniList, $state)
 EndFunc   ;==>stateUni
-
 Func posUni($dy)                    ;x						y			w			h
 	GUICtrlSetPos($uniGroup, $win[2] - $mapw - 12, 34 + $dy, $mapw + 4, $maph + 2)
 	;Информация о устройстве
@@ -1111,7 +1105,6 @@ Func posUni($dy)                    ;x						y			w			h
 	GUICtrlSetPos($uniInfoDE, $win[2] - $mapw + 72, 83 + $dy, $mapw - 92, 41)
 	GUICtrlSetPos($uniList, $win[2] - $mapw - 4, 144 + $dy, $mapw - 12, $maph - 116)
 EndFunc   ;==>posUni
-
 Func setUni($i, $j)
 	GUICtrlSetData($uniGroup, $name[$i] & " (" & $COM[$i + 1] & ", адрес " & Dec(StringMid($addr[$i][$j], 5, 2)) & ")")
 	$unitName = _HexToString($unit[$i][$j])
@@ -1534,13 +1527,13 @@ EndFunc   ;==>DECtoBIN
 ;~~~~~ Готово/Мониторинг ~~~~~
 ;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Func ststusBarState()
+Func statusBarState()
 	If $monitoring = 0 Then
 		GUICtrlSetData($statusBarState, "Стоп")
 	Else
 		GUICtrlSetData($statusBarState, "Мониторинг")
 	EndIf
-EndFunc   ;==>ststusBarState
+EndFunc   ;==>statusBarState
 
 ;~~~~~~~~~~~~~~~~
 ;~~~~~ Load ~~~~~
