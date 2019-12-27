@@ -3,19 +3,27 @@
 #AutoIt3Wrapper_outfile=rcu.exe
 #AutoIt3Wrapper_Res_Comment=for support mail to:
 #AutoIt3Wrapper_Res_Description=Microtech RCU-1 (Ethernet)
-#AutoIt3Wrapper_Res_Fileversion=0.0.0.17
+#AutoIt3Wrapper_Res_Fileversion=0.0.0.18
 #AutoIt3Wrapper_Res_LegalCopyright=
-#AutoIt3Wrapper_Run_AU3Check=n
-#AutoIt3Wrapper_Run_After=Utilities\ResHacker\ResHacker.exe -delete %out%, %out%, DIALOG, 1000,
-#AutoIt3Wrapper_Run_After=Utilities\ResHacker\ResHacker.exe -delete %out%, %out%, MENU, 166,
-#AutoIt3Wrapper_Run_After=Utilities\ResHacker\ResHacker.exe -delete %out%, %out%, ICON, 162,
-#AutoIt3Wrapper_Run_After=Utilities\ResHacker\ResHacker.exe -delete %out%, %out%, ICON, 164,
-#AutoIt3Wrapper_Run_After=Utilities\ResHacker\ResHacker.exe -delete %out%, %out%, ICON, 169,
-#AutoIt3Wrapper_Run_After=Utilities\ResHacker\ResHacker.exe -add %out%, %out%, img\critical.bmp,  RCData, bmp_critical, 0
+#AutoIt3Wrapper_UseUpx=n
+#AutoIt3Wrapper_Run_After=ResHacker.exe -delete %out%, %out%, DIALOG, 1000,
+#AutoIt3Wrapper_Run_After=ResHacker.exe -delete %out%, %out%, MENU, 166,
+#AutoIt3Wrapper_Run_After=ResHacker.exe -add %out%, %out%, img\logo.bmp, bitmap, LOGO_BMP, 0
+#AutoIt3Wrapper_Run_After=ResHacker.exe -add %out%, %out%, img\critical.bmp, bitmap, CRITICAL_BMP, 0
+#AutoIt3Wrapper_Run_After=ResHacker.exe -add %out%, %out%, img\minor.bmp, bitmap, MINOR_BMP, 0
+#AutoIt3Wrapper_Run_After=ResHacker.exe -add %out%, %out%, img\normal.bmp, bitmap, NORMAL_BMP, 0
+#AutoIt3Wrapper_Run_After=ResHacker.exe -add %out%, %out%, img\disable.bmp, bitmap, DISABLE_BMP, 0
+#AutoIt3Wrapper_Run_After=upx.exe --best --compress-resources=0 "%out%"
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
-If @YEAR >= 2009 Then
-	If @MON >= 7 Then
-		Exit
+
+$licYear = 2009
+$licMon = 12
+$licDay = 31
+If @YEAR >= $licYear Then
+	If @MON >= $licMon Then
+		If @MDAY > $licDay Then
+			Exit
+		EndIf
 	EndIf
 EndIf
 
@@ -29,6 +37,7 @@ EndIf
 #include <GuiListView.au3>
 #include <Array.au3>
 #include <string.au3>
+#include <resources.au3>
 
 ;=====External Files=====
 $fileOptions = @ScriptDir & "/options.ini"
@@ -65,10 +74,14 @@ EndSelect
 ;===============
 
 $programmName = "Microtech RCU-1 (Ethernet)" ;header
-$loadWin = GUICreate($programmName, 297, 60, -1, -1, $WS_POPUP)
+$loadWin = GUICreate($programmName, 413, 137, -1, -1, $WS_POPUP)
+$picLogo = GUICtrlCreatePic("", 0, 0, 413, 77)
+_ResourceSetImageToCtrl($picLogo, "LOGO_BMP", $RT_BITMAP)
+$hBmpLogo = _ResourceGet("LOGO_BMP", $RT_BITMAP)
+_SetBitmapToCtrl($picLogo, $hBmpLogo)
 GUISetIcon($fileIcon)
-$loadPro = GUICtrlCreateProgress(10, 10, 277, 18)
-$loadLab = GUICtrlCreateLabel("Загрузка данных...", 10, 35, 277, 20, $SS_CENTER)
+$loadPro = GUICtrlCreateProgress(10, 87, 393, 18)
+$loadLab = GUICtrlCreateLabel("Загрузка данных...", 10, 113, 393, 20, $SS_CENTER)
 GUISetState(@SW_SHOW, $loadWin)
 GUICtrlSetData($loadPro, 0)
 
@@ -415,12 +428,30 @@ While 1
 			If BitAND(GUICtrlRead($menuViewStyleWinXP), $GUI_CHECKED) = $GUI_CHECKED Then
 				GUICtrlSetState($menuViewStyleClassic, $GUI_CHECKED)
 				GUICtrlSetState($menuViewStyleWinXP, $GUI_UNCHECKED)
+				$user = MsgBox(0x40144, $programmName, "Внесенные изменения вступят в силу только после перезапуска программы." & @CRLF _
+						 & "Перезапустить сейчас?", 5)
+				If $user = 6 Then
+					close()
+					GUIDelete()
+					Sleep(2000)
+					Run(@ScriptDir & "/rcu.exe")
+					Exit
+				EndIf
 			EndIf
 		Case $msg = $menuViewStyleWinXP
 			$win = WinGetPos($programmName)
 			If BitAND(GUICtrlRead($menuViewStyleClassic), $GUI_CHECKED) = $GUI_CHECKED Then
 				GUICtrlSetState($menuViewStyleWinXP, $GUI_CHECKED)
 				GUICtrlSetState($menuViewStyleClassic, $GUI_UNCHECKED)
+				$user = MsgBox(0x40144, $programmName, "Внесенные изменения вступят в силу только после перезапуска программы." & @CRLF _
+						 & "Перезапустить сейчас?", 5)
+				If $user = 6 Then
+					close()
+					GUIDelete()
+					Sleep(2000)
+					Run(@ScriptDir & "/rcu.exe")
+					Exit
+				EndIf
 			EndIf
 			;=====Menu=====
 		Case $msg = $menuFileExit
@@ -479,6 +510,7 @@ While 1
 			Next
 		Case $msg = $toolBarBtn3
 			delTree()
+			Sleep(20)
 			$win = WinGetPos($programmName)
 			tree($dy)
 			setTree()
@@ -861,14 +893,21 @@ Func menuHelpAbout() ;Меню -> Справка -> О программе
 	If $aboutWinY < 0 Then $aboutWinY = 0
 	If $aboutWinY + $aboutWinH > @DesktopHeight Then $aboutWinY = @DesktopHeight - $aboutWinH
 	$aboutWin = GUICreate("О программе """ & $programmName & """", $aboutWinW, $aboutWinH, $aboutWinX, $aboutWinY, 0x00000000, 0x00000000, $mainWin)
-	GUICtrlCreatePic($fileAboutLogo, 0, 0, 413, 77)
+	
+	$picLogo = GUICtrlCreatePic("", 0, 0, 413, 77)
+	_ResourceSetImageToCtrl($picLogo, "LOGO_BMP", $RT_BITMAP)
+	$hBmpLogo = _ResourceGet("LOGO_BMP", $RT_BITMAP)
+	_SetBitmapToCtrl($picLogo, $hBmpLogo)
+	
 	GUICtrlCreateIcon($fileIcon, -1, 11, 90)
 	GUICtrlCreateLabel($programmName, 52, 89, 133, 15)
-	GUICtrlCreateLabel("Версия 0.0.0.17 (beta)", 52, 106, 93, 15)
-	GUICtrlCreateLabel("ООО, 2009", 52, 122, 176, 15)
+	GUICtrlCreateLabel("Версия 0.0.0.18 (beta)", 52, 106, 93, 15)
+	GUICtrlCreateLabel("ООО , 2009", 52, 122, 176, 15)
 	GUICtrlCreateLabel("mail-to: ", 52, 138, 126, 15)
 	GUICtrlSetColor(-1, 0x0000FF)
 	GUICtrlSetCursor(-1, 0)
+	GUICtrlCreateLabel("Срок действия лицензии: " & $licDay & "." & $licMon & "." & $licYear, 52, 170, 187, 15)
+	GUICtrlSetColor(-1, 0x808080)
 	GUICtrlCreateLabel("", 53, 239, 351, 2, $SS_SUNKEN)
 	$aboutOK = GUICtrlCreateButton("OK", 330, 289, 75, 23)
 	GUICtrlSetState(-1, $GUI_DEFBUTTON)
@@ -924,6 +963,7 @@ Func setTree()
 				$unitName = _HexToString($unit[$i][$j])
 				$unitName = StringSplit($unitName, " ")
 				If $unitName[1] <> "" Then $unitName[1] = StringTrimLeft($unitName[1], 2)
+				$unitName[1] = StringReplace($unitName[1], Chr(22), "_")
 				$territoryUni[$i][$j] = GUICtrlCreateTreeViewItem($unitName[1], $territory[$i])
 			EndIf
 		Next
@@ -1077,6 +1117,7 @@ Func setUni($i, $j)
 	$unitName = _HexToString($unit[$i][$j])
 	$unitName = StringSplit($unitName, " ")
 	If $unitName[1] <> "" Then $unitName[1] = StringTrimLeft($unitName[1], 2)
+	$unitName[1] = StringReplace($unitName[1], Chr(22), "_")
 	GUICtrlSetData($uniInfoID, $unitName[1])
 	If StringLeft($snum[$i][$j], 4) = "41FF" Then
 		Dim $dataarray[6]
@@ -1148,6 +1189,8 @@ Func setUni($i, $j)
 					$ch2D[$z][0] = $tmp[0]
 					$ch2D[$z][1] = $tmp2[$m]
 					$ch2D[$z][2] = $tmp[2]
+					$tmp[3] = StringReplace($tmp[3], "0", "-")
+					$tmp[3] = StringReplace($tmp[3], "1", "-")
 					$ch2D[$z][3] = $tmp[3]
 					$z = $z + 1
 				Next
@@ -1367,6 +1410,7 @@ Func error($error11, $COM, $unit)
 	$unitName = _HexToString($unit)
 	$unitName = StringSplit($unitName, " ")
 	If $unitName[1] <> "" Then $unitName[1] = StringTrimLeft($unitName[1], 2)
+	$unitName[1] = StringReplace($unitName[1], Chr(22), "_")
 	MsgBox(8208, $programmName, $error11 & @CRLF & @CRLF _
 			 & "Порт: " & $COM & @CRLF _
 			 & "Устройство: " & $unitName[1], 5)
