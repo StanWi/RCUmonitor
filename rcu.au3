@@ -1,267 +1,1967 @@
-;константы
+#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+#AutoIt3Wrapper_icon=img\rcu.ico
+#AutoIt3Wrapper_outfile=rcu.exe
+#AutoIt3Wrapper_Res_Comment=for support mail to:
+#AutoIt3Wrapper_Res_Description=Microtech RCU-1 (Ethernet)
+#AutoIt3Wrapper_Res_Fileversion=0.0.0.17
+#AutoIt3Wrapper_Res_LegalCopyright=
+#AutoIt3Wrapper_Run_AU3Check=n
+#AutoIt3Wrapper_Run_After=Utilities\ResHacker\ResHacker.exe -delete %out%, %out%, DIALOG, 1000,
+#AutoIt3Wrapper_Run_After=Utilities\ResHacker\ResHacker.exe -delete %out%, %out%, MENU, 166,
+#AutoIt3Wrapper_Run_After=Utilities\ResHacker\ResHacker.exe -delete %out%, %out%, ICON, 162,
+#AutoIt3Wrapper_Run_After=Utilities\ResHacker\ResHacker.exe -delete %out%, %out%, ICON, 164,
+#AutoIt3Wrapper_Run_After=Utilities\ResHacker\ResHacker.exe -delete %out%, %out%, ICON, 169,
+#AutoIt3Wrapper_Run_After=Utilities\ResHacker\ResHacker.exe -add %out%, %out%, img\critical.bmp,  RCData, bmp_critical, 0
+#EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
+If @YEAR >= 2009 Then
+	If @MON >= 7 Then
+		Exit
+	EndIf
+EndIf
+
+;#NoTrayIcon
 #include <GUIConstantsEx.au3>
 #include <WindowsConstants.au3>
 #include <StaticConstants.au3>
-#include <ButtonConstants.au3>
 #include <TreeViewConstants.au3>
-#include <ComboConstants.au3>
 #include <EditConstants.au3>
-;дополнения
-#include <file.au3>
+#include <File.au3>
 #include <GuiListView.au3>
-#include <string.au3>
 #include <Array.au3>
-;функции
-#include <load.au3>
-#include <list.au3>
-#include <main.au3>
-#include <map.au3>
-#include <menu.au3>
-#include <tree.au3>
-#include <adddel.au3>
-#include <unit.au3>
-#include <autorefresh.au3>
-#include <service.au3>
-;COM-движок
-#include <CommMG.au3>
-#include <comConnection.au3>
-#include <comObject.au3>
-;константы
-$programmName = "Микротек RCU-1 (Ethernet)"
-$fileNetwork = @ScriptDir & "\network.ini"
-$fileOptions = @ScriptDir & "\options.ini"
-$fileEvents = "events.log"
-$fileRX = @ScriptDir & "\rx.log"
-$fileTX = @ScriptDir & "\tx.log"
+#include <string.au3>
 
-;~ Select
-;~ Case FileExists(IniRead($fileOptions,"path","map"))
-;~ 	$fileMap = IniRead($fileOptions,"path","map")
-;~ Case FileExists(@ScriptDir & "\map.bmp")
-;~ 	$fileMap = @ScriptDir & "\map.bmp"
-;~ EndSelect
+;=====External Files=====
+$fileOptions = @ScriptDir & "/options.ini"
+$fileNetwork = @ScriptDir & "/network.ini"
+$fileEvents = @ScriptDir & "/events.log"
+$fileIcon = @ScriptDir & "/img/rcu.ico"
+$fileMapPic = @ScriptDir & "/map.bmp"
+$fileMapIconNormal = @ScriptDir & "/img/normal.bmp"
+$fileMapIconMinor = @ScriptDir & "/img/minor.bmp"
+$fileMapIconCritical = @ScriptDir & "/img/critical.bmp"
+$fileMapIconDisable = @ScriptDir & "/img/disable.bmp"
+$fileAboutLogo = @ScriptDir & "/img/logo.bmp"
+;========================
 
-$sysPing = IniRead($fileOptions, "main", "ping", 250)
+;=====Start=====
+Select
+	Case Not (FileExists($fileOptions))
+		Exit
+	Case Not (FileExists($fileNetwork))
+		Exit
+	Case Not (FileExists($fileMapIconNormal))
+		Exit
+	Case Not (FileExists($fileMapPic))
+		Exit
+	Case Not (FileExists($fileEvents))
+		$user = MsgBox(0x40114, "Внимание", "Отсутствует файл журнала." & @CRLF & "Создать новый?")
+		If $user = 6 Then
+			_FileCreate($fileEvents)
+			newEvent("|Создан новый файл журнала")
+		Else
+			Exit
+		EndIf
+EndSelect
+;===============
 
-$maplable = 0
-$map = 0
-$form = 0
-$groupInfo = 0
-$lableID = 0
-$inputID = 0
-$lableSN = 0
-$inputSN = 0
-$lableAuto = 0
-$groupTemp = 0
-$lableTemp = 0
-$inputTemp = 0
-$lableLimit = 0
-$inputLimit = 0
-$progress = 0
-;unit
-$unitForm = 0
-$unitInfo = 0
-$lableID = 0
-$unitID = 0
-$lableSN = 0
-$unitSN = 0
-$lableDE = 0
-$unitDE = 0
-$unitlist = 0
-;Список Аварий
-$list = 0
+$programmName = "Microtech RCU-1 (Ethernet)" ;header
+$loadWin = GUICreate($programmName, 297, 60, -1, -1, $WS_POPUP)
+GUISetIcon($fileIcon)
+$loadPro = GUICtrlCreateProgress(10, 10, 277, 18)
+$loadLab = GUICtrlCreateLabel("Загрузка данных...", 10, 35, 277, 20, $SS_CENTER)
+GUISetState(@SW_SHOW, $loadWin)
+GUICtrlSetData($loadPro, 0)
 
-; ==================== Путь запуска автообновления ====================
-;$pathRCUmonitor = @ScriptDir & "/distr/AutoIt3.exe" & " """ & @ScriptDir & "/rcumonitor.au3"""
-;$pathRCUmonitor = @ScriptDir & "/rcumonitor.au3"
-$pathRCUmonitor = @ScriptDir & "/rcumonitor.exe"
+Global $programmName, $fileOptions
+Global $COM, $name, $IP, $auto, $posIcon
+Global $unit, $addr, $snum
+Global $data, $stat, $lmts, $lste
+Global $territory, $territoryMenu, $territoryMenuAuto, $territoryMenuRefresh, $territoryMenuData
+Global $territoryUni
+Global $maintreeview, $treeview
+Global $mapPic, $mapLable, $mapIcon, $alarmStatus
+Global $rcuGroup, $rcuInfo, $rcuInfoIDlable, $rcuInfoID, $rcuInfoSNlable, $rcuInfoSN
+Global $rcuTemp, $rcuTempTPlable, $rcuTempTP, $rcuTempLMlable, $rcuTempLM, $rcuAuto, $rcuAutoOn, $rcuAutoOff, $rcuProgress
+Global $uniGroup, $uniInfo, $uniInfoIDlable, $uniInfoID, $uniInfoSNlable, $uniInfoSN, $uniInfoDElable, $uniInfoDE, $uniList
+Global $statusBarAlarm
+Global $port
+Global $lineList, $nList
 
-; ==================== Старт программы ====================
+;=====Constants=====
+$dwinw = 8    ;погрешность определения ширины окна ($win[2] - $dwinw)
+$dwinh = 27    ;погрешность определения высоты окна ($win[3] - $dwinh)
+;$WS_MINIMIZEBOX	 = 0x00020000	;WindowsConstants.au3
+;$WS_CAPTION		 = 0x00C00000	;WindowsConstants.au3
+;$WS_POPUP			 = 0x80000000	;WindowsConstants.au3
+;$WS_SYSMENU		 = 0x00080000	;WindowsConstants.au3
+;$GUI_SS_DEFAULT_GUI = BitOR($WS_MINIMIZEBOX,$WS_CAPTION,$WS_POPUP,$WS_SYSMENU)	;WindowsConstants.au3
+;$WS_MAXIMIZEBOX	 = 0x00010000	;WindowsConstants.au3
+;$WS_SIZEBOX		 = 0x00040000	;WindowsConstants.au3
+;ws_all = 0x00CF0000
+;$SS_SUNKEN			 = 0x00001000	;StaticConstants.au3
+;$TVS_HASBUTTONS	 = 0x00000001	;TreeViewConstants.au3
+;$TVS_HASLINES		 = 0x00000002	;TreeViewConstants.au3
+;$TVS_DISABLEDRAGDROP= 0x00000010	;TreeViewConstants.au3
+;$TVS_SHOWSELALWAYS	 = 0x00000020	;TreeViewConstants.au3
+;tvs_all = 0x00000033
+;$WS_EX_CLIENTEDGE	 = 0x00000200	;WindowsConstants.au3
+;$GUI_DEFBUTTON		 = 0x00000200	;GUIConstantsEx.au3
+;$GUI_EXPAND		 = 0x00000400	;GUIConstantsEx.au3
+;$ES_READONLY		 = 0x00000800	;EditConstants.au3
+;$GUI_EVENT_CLOSE	 = -3			;GUIConstantsEx.au3
+$btnw = 23    ;button width
+$btnh = 22    ;button height
+$mapw = 500    ;map height (min 300)
+$maph = 430    ;map height (min 350)
+$dy = 0
+$dh = 0
+
+;=====COM=====
+Const $sUDFVersion = "CommMG.au3 V2.1"
+Global $fPortOpen = False
+Global $hDll
+
+;=====Load=====
 load()
-main()
-menu()
-tree()
-map()
-list()
 
-; ==================== Обновление Списка аварий ====================
+;=====GUI start=====
+GUICtrlSetData($loadPro, 10)
+;~~~~~Main~~~~~
+Dim $win[4]
+$win[2] = IniRead($fileOptions, "main", "winw", 600)
+$win[3] = IniRead($fileOptions, "main", "winh", 600)
+$win[0] = IniRead($fileOptions, "main", "winx", Round((@DesktopWidth - $win[2]) / 2))
+$win[1] = IniRead($fileOptions, "main", "winy", Round((@DesktopHeight - $win[3]) / 2))
+$winz = DECtoBIN(IniRead($fileOptions, "main", "winz", 7), 4)
+If $win[2] > @DesktopWidth Then $win[2] = @DesktopWidth
+If $win[3] > @DesktopHeight Then $win[3] = @DesktopHeight
+If $win[0] < 0 Then $win[0] = 0
+If $win[0] + $win[2] > @DesktopWidth Then $win[0] = @DesktopWidth - $win[2]
+If $win[1] < 0 Then $win[1] = 0
+If $win[1] + $win[3] > @DesktopHeight Then $win[1] = @DesktopHeight - $win[3]
+If $winz[1] = 0 Then $dy = -28
+If $winz[2] = 0 Then $dh = 20
+$mainWin = GUICreate($programmName, ($win[2] - $dwinw), ($win[3] - $dwinh), $win[0], $win[1], BitOR($GUI_SS_DEFAULT_GUI, $WS_MAXIMIZEBOX, $WS_SIZEBOX))
+GUISetIcon($fileIcon)
+GUICtrlSetData($loadPro, 20)
+;~~~~~Menu~~~~~
+$menuFile = GUICtrlCreateMenu("&Файл")
+$menuFileExit = GUICtrlCreateMenuItem("В&ыход", $menuFile)
+$menuView = GUICtrlCreateMenu("&Вид")
+$menuViewStyle = GUICtrlCreateMenu("&Оформление", $menuView)
+$menuViewStyleClassic = GUICtrlCreateMenuItem("Классический стиль", $menuViewStyle)
+$menuViewStyleWinXP = GUICtrlCreateMenuItem("Стиль Windows XP", $menuViewStyle)
+If $winz[3] = 0 Then
+	GUICtrlSetState($menuViewStyleClassic, $GUI_CHECKED)
+	GUICtrlSetState($menuViewStyleWinXP, $GUI_UNCHECKED)
+Else
+	GUICtrlSetState($menuViewStyleClassic, $GUI_UNCHECKED)
+	GUICtrlSetState($menuViewStyleWinXP, $GUI_CHECKED)
+EndIf
+$menuViewToolBar = GUICtrlCreateMenuItem("&Панель инструментов", $menuView)
+If $winz[1] = 0 Then
+	GUICtrlSetState($menuViewToolBar, $GUI_UNCHECKED)
+Else
+	GUICtrlSetState($menuViewToolBar, $GUI_CHECKED)
+EndIf
+$menuViewStatusBar = GUICtrlCreateMenuItem("&Строка состояния", $menuView)
+If $winz[2] = 0 Then
+	GUICtrlSetState($menuViewStatusBar, $GUI_UNCHECKED)
+Else
+	GUICtrlSetState($menuViewStatusBar, $GUI_CHECKED)
+EndIf
+$menuService = GUICtrlCreateMenu("С&ервис")
+$menuServiceMonitoring = GUICtrlCreateMenuItem("&Мониторинг", $menuService)
+$menuServicePing = GUICtrlCreateMenuItem("&Пинг...", $menuService)
+$menuServiceRefreshAll = GUICtrlCreateMenuItem("Обновить всю &сеть", $menuService)
+$menuServiceRefreshData = GUICtrlCreateMenuItem("Обновить данные всех &УУ", $menuService)
+$menuHelp = GUICtrlCreateMenu("&Справка")
+$menuHelpAbout = GUICtrlCreateMenuItem("&О программе", $menuHelp)
+$menuLine = GUICtrlCreateLabel("", 0, 0, ($win[2] - $dwinw), 2, $SS_SUNKEN)
+GUICtrlSetResizing(-1, 550)
+GUICtrlSetData($loadPro, 30)
+;~~~~~ToolBar~~~~~
+$toolBarBtn1 = GUICtrlCreateButton(">", 2, 4, $btnw, $btnh)
+$monitoring = 0
+GUICtrlSetBkColor($toolBarBtn1, 0xFF0000)
+GUICtrlSetResizing(-1, 802)
+GUICtrlSetTip(-1, "Старт/Стоп")
+$toolBarLine1 = GUICtrlCreateLabel("", 27, 4, 2, $btnh, $SS_SUNKEN)
+GUICtrlSetResizing(-1, 802)
+$toolBarBtn2 = GUICtrlCreateButton("+", 31, 4, $btnw, $btnh)
+GUICtrlSetResizing(-1, 802)
+GUICtrlSetTip(-1, "Развернуть")
+$toolBarBtn3 = GUICtrlCreateButton("--", 56, 4, $btnw, $btnh)
+GUICtrlSetResizing(-1, 802)
+GUICtrlSetTip(-1, "Свернуть")
+$toolBarLine = GUICtrlCreateLabel("", 0, 28, ($win[2] - $dwinw), 2, $SS_SUNKEN)
+GUICtrlSetResizing(-1, 550)
+If $winz[1] = 0 Then stateToolBar($GUI_HIDE)
+GUICtrlSetData($loadPro, 40)
+;~~~~~Tree~~~~~
+tree($dy)
+setTree()
+GUICtrlSetData($loadPro, 50)
+;~~~~~Map~~~~~
+map($dy)
+$treeLevel = 0
+GUICtrlSetData($loadPro, 60)
+;~~~~~RCU-1~~~~~
+$rcuGroup = GUICtrlCreateGroup("", $win[2] - $mapw - 12, 34 + $dy, $mapw + 4, $maph + 2)
+GUICtrlSetResizing(-1, 804)
+;Информация о УУ
+$rcuInfo = GUICtrlCreateGroup("Информация об УУ", $win[2] - $mapw - 4, 50 + $dy, $mapw - 12, 80)
+GUICtrlSetResizing(-1, 804)
+$rcuInfoIDlable = GUICtrlCreateLabel("ID", $win[2] - $mapw + 16, 75 + $dy, 12, 15)
+GUICtrlSetResizing(-1, 804)
+$rcuInfoID = GUICtrlCreateInput("", $win[2] - $mapw + 60, 72 + $dy, 30, 20, $ES_READONLY)
+GUICtrlSetResizing(-1, 804)
+$rcuInfoSNlable = GUICtrlCreateLabel("SN", $win[2] - $mapw + 16, 99 + $dy, 16, 15)
+GUICtrlSetResizing(-1, 804)
+$rcuInfoSN = GUICtrlCreateInput("", $win[2] - $mapw + 60, 96 + $dy, 30, 20, $ES_READONLY)
+GUICtrlSetResizing(-1, 804)
+;Температура
+$rcuTemp = GUICtrlCreateGroup("Температура, " & Chr(0xB0) & "C", $win[2] - $mapw - 4, 138 + $dy, $mapw - 12, 80)
+GUICtrlSetResizing(-1, 804)
+$rcuTempTPlable = GUICtrlCreateLabel("Датчик", $win[2] - $mapw + 16, 163 + $dy, 38, 15)
+GUICtrlSetResizing(-1, 804)
+$rcuTempTP = GUICtrlCreateInput("", $win[2] - $mapw + 60, 160 + $dy, 30, 20, $ES_READONLY)
+GUICtrlSetResizing(-1, 804)
+$rcuTempLMlable = GUICtrlCreateLabel("Порог", $win[2] - $mapw + 16, 187 + $dy, 33, 15)
+GUICtrlSetResizing(-1, 804)
+$rcuTempLM = GUICtrlCreateInput("", $win[2] - $mapw + 60, 184 + $dy, 30, 20, $ES_READONLY)
+GUICtrlSetResizing(-1, 804)
+;Автообновление
+$rcuAuto = GUICtrlCreateGroup("Автообновление", $win[2] - $mapw - 4, 226 + $dy, $mapw - 12, 80)
+GUICtrlSetResizing(-1, 804)
+$rcuAutoOn = GUICtrlCreateRadio("Вкл.", $win[2] - $mapw + 16, 251 + $dy, 41, 15)
+GUICtrlSetResizing(-1, 804)
+$rcuAutoOff = GUICtrlCreateRadio("Выкл.", $win[2] - $mapw + 16, 275 + $dy, 49, 15)
+GUICtrlSetResizing(-1, 804)
+;Прогресс
+$rcuProgress = GUICtrlCreateProgress($win[2] - $mapw - 4, $maph + 2 + $dy, $mapw - 12, 18)
+GUICtrlSetResizing(-1, 804)
+GUICtrlSetState(-1, $GUI_HIDE)
+stateRcu($GUI_HIDE)
+GUICtrlSetData($loadPro, 70)
+;~~~~~Unit~~~~~
+$uniGroup = GUICtrlCreateGroup("", $win[2] - $mapw - 12, 34 + $dy, $mapw + 4, $maph + 2)
+GUICtrlSetResizing(-1, 804)
+;Информация о устройстве
+$uniInfo = GUICtrlCreateGroup("Информация об устройстве", $win[2] - $mapw - 4, 50 + $dy, $mapw - 12, 80)
+GUICtrlSetResizing(-1, 804)
+$uniInfoIDlable = GUICtrlCreateLabel("Модель:", $win[2] - $mapw + 16, 67 + $dy, 43, 15)
+GUICtrlSetResizing(-1, 804)
+$uniInfoID = GUICtrlCreateLabel("", $win[2] - $mapw + 61, 67 + $dy, $mapw - 219, 15)
+GUICtrlSetResizing(-1, 804)
+$uniInfoSNlable = GUICtrlCreateLabel("Серийный номер:", $win[2] - 156, 67 + $dy, 90, 15)
+GUICtrlSetResizing(-1, 804)
+$uniInfoSN = GUICtrlCreateLabel("", $win[2] - 64, 67 + $dy, 44, 15)
+GUICtrlSetResizing(-1, 804)
+$uniInfoDElable = GUICtrlCreateLabel("Описание:", $win[2] - $mapw + 16, 83 + $dy, 54, 15)
+GUICtrlSetResizing(-1, 804)
+$uniInfoDE = GUICtrlCreateLabel("", $win[2] - $mapw + 72, 83 + $dy, $mapw - 92, 41)
+GUICtrlSetResizing(-1, 804)
+;Список отказов
+$uniList = GUICtrlCreateListView("N|Параметр|Значение|Ед.изм.|Ниж.пор.|Верх.пор.", $win[2] - $mapw - 4, 144 + $dy, $mapw - 12, $maph - 116)
+_GUICtrlListView_SetExtendedListViewStyle($uniList, BitOR($LVS_EX_FULLROWSELECT, $LVS_EX_GRIDLINES, $LVS_EX_DOUBLEBUFFER))
+GUICtrlSetResizing(-1, 804)
+stateUni($GUI_HIDE)
+GUICtrlSetData($loadPro, 80)
+;~~~~~List~~~~~
+$list = GUICtrlCreateListView("Время|Объект|Событие", 0, 38 + $dy + $maph, ($win[2] - $dwinw), ($win[3] - $dwinh) - $maph - 77 - $dy + $dh, $LVS_SORTDESCENDING)
+GUICtrlSetResizing(-1, 102)
+_GUICtrlListView_SetExtendedListViewStyle($list, BitOR($LVS_EX_FULLROWSELECT, $LVS_EX_GRIDLINES, $LVS_EX_DOUBLEBUFFER))
+_GUICtrlListView_SetColumnWidth($list, 0, 120)
+_GUICtrlListView_SetColumnWidth($list, 1, 155)
+_GUICtrlListView_SetColumnWidth($list, 2, 450)
+GUICtrlSetData($loadLab, "Загрузка списка аварий...")
+GUICtrlSetData($loadPro, 0)
+$nList = _FileCountLines($fileEvents)
+$nListReal = $nList
+If $nList > 500 Then $nList = 500
+$fileList = FileOpen($fileEvents, 0)
+For $i = 1 To $nList
+	GUICtrlCreateListViewItem(FileReadLine($fileList, $nListReal - $nList + $i), $list)
+	GUICtrlSetData($loadPro, 100 * $i / $nList)
+Next
+FileClose($fileList)
+;~~~~~StatusBar~~~~~
+$statusBarState = GUICtrlCreateLabel("", 0, ($win[3] - $dwinh) - 37, ($win[2] - $dwinw) - 109, 18, $SS_SUNKEN)
+GUICtrlSetResizing(-1, 582)
+$statusBarAlarm = GUICtrlCreateLabel("", ($win[2] - $dwinw) - 107, ($win[3] - $dwinh) - 37, 50, 18, BitOR($SS_SUNKEN, $SS_RIGHT))
+GUICtrlSetResizing(-1, 772)
+$statusBarTimer = GUICtrlCreateLabel("", ($win[2] - $dwinw) - 55, ($win[3] - $dwinh) - 37, 55, 18, BitOR($SS_SUNKEN, $SS_RIGHT))
+GUICtrlSetResizing(-1, 772)
+If $winz[2] = 0 Then stateStatusBar($GUI_HIDE)
+;===================
+
+;=====Обновление Списка аварий=====
 $dateEvents = FileGetTime($fileEvents) ;время последнего изменения Списка аварий
 
-GUISetState()
+;=====SetData=====
+$timer = TimerInit()
+GUICtrlSetData($statusBarState, "Готово")
+GUICtrlSetData($statusBarAlarm, $nList & " ")
+GUICtrlSetData($statusBarTimer, "0:00:00 ")
+newEvent("|Вход в систему")
+
+GUISetState(@SW_HIDE, $loadWin)
+GUICtrlDelete($loadLab)
+GUICtrlDelete($loadPro)
+GUICtrlDelete($loadWin)
+
+GUISetState(@SW_SHOW, $mainWin)
+If $winz[0] = 1 Then GUISetState(@SW_MAXIMIZE)
 While 1
+	$sec = @SEC
 	$msg = GUIGetMsg()
 	$newEvents = FileGetTime($fileEvents)
 	Select
-		Case $msg = $GUI_EVENT_CLOSE Or $msg = $exititem
-			close()
-			ExitLoop
-		Case $msg = $infoitem
-			MsgBox(0x40000, "О программе Микротек RCU-1 (Ethernet)", "Версия 0.16 beta")
-		Case $msg = $serviceoptionitem
-			GUISetState(@SW_DISABLE)
-			serviceoption()
-			GUISetState(@SW_ENABLE)
-		Case $msg = $servicepingitem
-			GUISetState(@SW_DISABLE)
-			serviceping()
-			GUISetState(@SW_ENABLE)
-		Case $msg = $servicemonitoritem Or $msg = $start
-			If BitAND(GUICtrlRead($servicemonitoritem), $GUI_CHECKED) = $GUI_CHECKED Then
-				GUICtrlSetState($servicemonitoritem, $GUI_UNCHECKED)
-				GUICtrlSetImage($start, @ScriptDir & "/img/btn_start.bmp")
-				IniWrite($fileOptions, "main", "auto", 0)
-			Else
-				GUICtrlSetState($servicemonitoritem, $GUI_CHECKED)
-				GUICtrlSetImage($start, @ScriptDir & "/img/btn_stop.bmp")
-				IniWrite($fileOptions, "main", "auto", 1)
-				Run($pathRCUmonitor)
-			EndIf
-		Case $msg = $expand
-			GUICtrlSetState($treeview, BitOR($GUI_EXPAND, $GUI_DEFBUTTON))
-			For $i = 0 To $COM[0] - 1
-				GUICtrlSetState($territory[$i], $GUI_EXPAND)
-			Next
-		Case $msg = $deexpand
-			GUICtrlDelete($maintreeview)
-			tree()
-		Case $msg = $delitem
-			GUISetState(@SW_DISABLE)
-			menufiledel()
-			delmap()
-			load()
-			GUICtrlDelete($maintreeview)
-			tree()
-			map()
-			GUISetState(@SW_ENABLE)
-		Case $msg = $additem
-			GUISetState(@SW_DISABLE)
-			menufileadd()
-			delmap()
-			load()
-			GUICtrlDelete($maintreeview)
-			tree()
-			map()
-			GUISetState(@SW_ENABLE)
-		Case $msg = $treeview
-			load()
-			delmap()
-			map()
-			; ==================== Обновление Списка аварий ====================
+		;=====Обновление Списка аварий=====
 		Case $newEvents[3] <> $dateEvents[3] Or $newEvents[4] <> $dateEvents[4] Or $newEvents[5] <> $dateEvents[5]
 			$dateEvents = $newEvents
-			list()
+			$nListNew = _FileCountLines($fileEvents)
+			$nListChange = $nListNew - $nListReal
+			If $nListChange > 0 Then
+				$fileList = FileOpen($fileEvents, 0)
+				For $i = 1 To $nListChange
+					GUICtrlCreateListViewItem(FileReadLine($fileList, $nListNew - $nListChange + $i), $list)
+				Next
+				FileClose($fileList)
+				$nList = $nList + $nListChange
+				GUICtrlSetData($statusBarAlarm, $nList & " ")
+				$nListReal = $nListNew
+			EndIf
+		Case $msg = $GUI_EVENT_CLOSE
+			close()
+			ExitLoop
+		Case $msg = $menuViewToolBar
+			$win = WinGetPos($programmName)
+			If BitAND(GUICtrlRead($menuViewToolBar), $GUI_CHECKED) = $GUI_CHECKED Then
+				$dy = -28
+				If BitAND(GUICtrlRead($menuViewStatusBar), $GUI_CHECKED) = $GUI_CHECKED Then
+					$dh = 0
+					GUICtrlSetState($menuViewToolBar, $GUI_UNCHECKED)
+					stateToolBar($GUI_HIDE)
+					posTree($dy)
+					posMap($dy)
+					posRcu($dy)
+					posUni($dy)
+					posList($dy, $dh)
+				Else
+					$dh = 20
+					GUICtrlSetState($menuViewToolBar, $GUI_UNCHECKED)
+					stateToolBar($GUI_HIDE)
+					posTree($dy)
+					posMap($dy)
+					posRcu($dy)
+					posUni($dy)
+					posList($dy, $dh)
+				EndIf
+			Else
+				$dy = 0
+				If BitAND(GUICtrlRead($menuViewStatusBar), $GUI_CHECKED) = $GUI_CHECKED Then
+					$dh = 0
+					GUICtrlSetState($menuViewToolBar, $GUI_CHECKED)
+					stateToolBar($GUI_SHOW)
+					posTree($dy)
+					posMap($dy)
+					posRcu($dy)
+					posUni($dy)
+					posList($dy, $dh)
+				Else
+					$dh = 20
+					GUICtrlSetState($menuViewToolBar, $GUI_CHECKED)
+					stateToolBar($GUI_SHOW)
+					posTree($dy)
+					posMap($dy)
+					posRcu($dy)
+					posUni($dy)
+					posList($dy, $dh)
+				EndIf
+			EndIf
+		Case $msg = $menuViewStatusBar
+			$win = WinGetPos($programmName)
+			If BitAND(GUICtrlRead($menuViewStatusBar), $GUI_CHECKED) = $GUI_CHECKED Then
+				$dh = 20
+				If BitAND(GUICtrlRead($menuViewToolBar), $GUI_CHECKED) = $GUI_CHECKED Then
+					$dy = 0
+					GUICtrlSetState($menuViewStatusBar, $GUI_UNCHECKED)
+					stateStatusBar($GUI_HIDE)
+					posList($dy, $dh)
+				Else
+					$dy = -28
+					GUICtrlSetState($menuViewStatusBar, $GUI_UNCHECKED)
+					stateStatusBar($GUI_HIDE)
+					posList($dy, $dh)
+				EndIf
+			Else
+				$dh = 0
+				If BitAND(GUICtrlRead($menuViewToolBar), $GUI_CHECKED) = $GUI_CHECKED Then
+					$dy = 0
+					GUICtrlSetState($menuViewStatusBar, $GUI_CHECKED)
+					stateStatusBar($GUI_SHOW)
+					posList($dy, $dh)
+				Else
+					$dy = -28
+					GUICtrlSetState($menuViewStatusBar, $GUI_CHECKED)
+					stateStatusBar($GUI_SHOW)
+					posList($dy, $dh)
+				EndIf
+			EndIf
+		Case $msg = $menuViewStyleClassic
+			$win = WinGetPos($programmName)
+			If BitAND(GUICtrlRead($menuViewStyleWinXP), $GUI_CHECKED) = $GUI_CHECKED Then
+				GUICtrlSetState($menuViewStyleClassic, $GUI_CHECKED)
+				GUICtrlSetState($menuViewStyleWinXP, $GUI_UNCHECKED)
+			EndIf
+		Case $msg = $menuViewStyleWinXP
+			$win = WinGetPos($programmName)
+			If BitAND(GUICtrlRead($menuViewStyleClassic), $GUI_CHECKED) = $GUI_CHECKED Then
+				GUICtrlSetState($menuViewStyleWinXP, $GUI_CHECKED)
+				GUICtrlSetState($menuViewStyleClassic, $GUI_UNCHECKED)
+			EndIf
+			;=====Menu=====
+		Case $msg = $menuFileExit
+			close()
+			ExitLoop
+		Case $msg = $menuServicePing
+			menuServicePing()
+		Case $msg = $menuServiceRefreshAll
+			$user = MsgBox(0x40124, $programmName, "Внимание! Данная операция займет некоторое время." & @CRLF _
+					 & "Продолжить?", 5)
+			If $user = 6 Then
+				stateMap($GUI_HIDE)
+				stateRcu($GUI_SHOW)
+				$treeLevel = 1
+				For $i = 0 To $COM[0] - 1
+					setRcu($i)
+					unitRefresh($i)
+				Next
+				GUICtrlSetState($treeview, $GUI_FOCUS)
+				GUICtrlSetState($treeview, BitOR($GUI_EXPAND, $GUI_DEFBUTTON))
+			EndIf
+		Case $msg = $menuServiceRefreshData
+			$user = MsgBox(0x40124, $programmName, "Внимание! Данная операция займет некоторое время." & @CRLF _
+					 & "Продолжить?", 5)
+			If $user = 6 Then
+				stateMap($GUI_HIDE)
+				stateRcu($GUI_SHOW)
+				$treeLevel = 1
+				For $i = 0 To $COM[0] - 1
+					setRcu($i)
+					rcuRefresh($i)
+				Next
+				GUICtrlSetState($treeview, $GUI_FOCUS)
+				GUICtrlSetState($treeview, BitOR($GUI_EXPAND, $GUI_DEFBUTTON))
+			EndIf
+		Case $msg = $menuHelpAbout
+			menuHelpAbout()
+			;==============
+			;=====ToolBar=====
+		Case $msg = $toolBarBtn1 Or $msg = $menuServiceMonitoring
+			If $monitoring = 1 Then
+				$monitoring = 0
+				GUICtrlSetState($menuServiceMonitoring, $GUI_UNCHECKED)
+				GUICtrlSetData($toolBarBtn1, ">")
+				GUICtrlSetBkColor($toolBarBtn1, 0xFF0000)
+			Else
+				GUICtrlSetState($menuServiceMonitoring, $GUI_CHECKED)
+				GUICtrlSetData($toolBarBtn1, "o")
+				$monitoring = 1
+				GUICtrlSetBkColor($toolBarBtn1, 0x00FF00)
+			EndIf
+			ststusBarState()
+		Case $msg = $toolBarBtn2
+			For $z = 0 To $COM[0] - 1
+				GUICtrlSetState($territory[$z], $GUI_EXPAND)
+			Next
+		Case $msg = $toolBarBtn3
+			delTree()
+			$win = WinGetPos($programmName)
+			tree($dy)
+			setTree()
+			;=================
+		Case $msg = $treeview
+			Select
+				Case $treeLevel = 0
+					delMap()
+					$win = WinGetPos($programmName)
+					loadMap()
+					map($dy)
+					stateMap($GUI_SHOW)
+				Case $treeLevel = 1
+					stateRcu($GUI_HIDE)
+					stateMap($GUI_SHOW)
+				Case $treeLevel = 2
+					stateUni($GUI_HIDE)
+					stateMap($GUI_SHOW)
+			EndSelect
+			$treeLevel = 0
+		Case $msg = $rcuAutoOn
+			If $auto[$port] <> 1 Then
+				$auto[$port] = 1
+				IniWrite($fileNetwork, $COM[$port + 1], "auto", "1")
+				GUICtrlSetColor($territory[$port], 0x000000)
+				GUICtrlSetImage($mapIcon[$port], $fileMapIconNormal)
+				GUICtrlSetState($territoryMenuAuto[$port], $GUI_CHECKED)
+				newEvent($name[$port] & " (" & $COM[$port + 1] & ")|Автообновление включено")
+			EndIf
+		Case $msg = $rcuAutoOff
+			If $auto[$port] <> 0 Then
+				$auto[$port] = 0
+				IniWrite($fileNetwork, $COM[$port + 1], "auto", "0")
+				GUICtrlSetImage($mapIcon[$port], $fileMapIconDisable)
+				GUICtrlSetColor($territory[$port], 0xc0c0c0)
+				GUICtrlSetState($territoryMenuAuto[$port], $GUI_UNCHECKED)
+				newEvent($name[$port] & " (" & $COM[$port + 1] & ")|Автообновление выключено")
+			EndIf
 	EndSelect
 	For $i = 0 To $COM[0] - 1
 		Select
 			Case $msg = $territory[$i]
-				load()
-				delmap()
-				uu($i)
-			Case $msg = $refreshstatusitem[$i]
-				autorefresh($i)
-			Case $msg = $refreshitem[$i]
-				delmap()
-				uu($i)
-				$comN = $i
-				For $k = 1 To 31
-					IniDelete($fileNetwork, $COM[$comN + 1], "unit" & $k)
-					IniDelete($fileNetwork, $COM[$comN + 1], "addr" & $k)
-					IniDelete($fileNetwork, $COM[$comN + 1], "mode" & $k)
-					IniDelete($fileNetwork, $COM[$comN + 1], "snum" & $k)
-					IniDelete($fileNetwork, $COM[$comN + 1], "stat" & $k)
-				Next
-				GUICtrlSetState($progress, $GUI_SHOW)
-				comConnect($COM[$i + 1])
-				comSend("ID? ")
-				read()
-				comSend("ID? ")
-				read()
-				Dim $model[32]
-				For $z = 1 To 31
-					GUICtrlSetData($progress, $z * 100 / 32)
-					$data = "CR" & Chr($z) & Chr(0x06)
-					comSend($data)
-					Sleep(1500)
-					$model[$z] = read()
-				Next
-				comSend("END ")
-				read()
-				comSend("END ")
-				read()
-				comDisconnect()
-				$n = 31
-				$j = 1
-				$k = 1
-				For $z = 1 To $n
-					$char = StringSplit($model[$z], "")
-					If $char[1] = "A" Or $char[1] = "я" Then
-						$var = StringSplit($model[$z], " ")
-					Else
-						$j = $j - 1
-						$n = $n + 1
-						$model[$z - 1] = $model[$z - 1] & $model[$z]
-					EndIf
-					If $var[0] > 1 And $char[2] = "я" Then
-						IniWrite($fileNetwork, $COM[$comN + 1], "unit" & $k, StringTrimLeft($var[1], 2))
-						IniWrite($fileNetwork, $COM[$comN + 1], "addr" & $k, $j)
-						$k = $k + 1
-					EndIf
-					$j = $j + 1
-				Next
-				GUICtrlSetData($progress, 100)
-				load()
-				GUICtrlDelete($maintreeview)
-				tree()
-				GUICtrlSetState($progress, $GUI_HIDE)
-			Case $msg = $refreshdata[$i]
-				delmap()
-				uu($i)
-				GUICtrlSetState($progress, $GUI_SHOW)
-				$comN = $i
-				comConnect($COM[$i + 1])
-				comSend("ID? ")
-				$rx = readByte()
-				$var = comRead($rx)
-				GUICtrlSetData($progress, 1 * 100 / 6)
-				IniWrite($fileNetwork, $COM[$comN + 1], $var[0], $var[1])
-				comSend("ID? ")
-				$rx = readByte()
-				$var = comRead($rx)
-				GUICtrlSetData($progress, 2 * 100 / 6)
-				IniWrite($fileNetwork, $COM[$comN + 1], $var[0], $var[1])
-				comSend("SN? ")
-				$rx = readByte()
-				$var = comRead($rx)
-				GUICtrlSetData($progress, 3 * 100 / 6)
-				IniWrite($fileNetwork, $COM[$comN + 1], $var[0], $var[1])
-				comSend("TC? ")
-				$rx = readByte()
-				$var = comRead($rx)
-				GUICtrlSetData($progress, 4 * 100 / 6)
-				IniWrite($fileNetwork, $COM[$comN + 1], $var[0], $var[1])
-				comSend("TP? ")
-				$rx = readByte()
-				$var = comRead($rx)
-				GUICtrlSetData($progress, 5 * 100 / 6)
-				IniWrite($fileNetwork, $COM[$comN + 1], $var[0], $var[1])
-				comSend("END ")
-				$rx = readByte()
-				$var = comRead($rx)
-				GUICtrlSetData($progress, 6 * 100 / 6)
-				comDisconnect()
-				load()
-				delmap()
-				uu($comN)
-				GUICtrlSetState($progress, $GUI_HIDE)
+				Select
+					Case $treeLevel = 0
+						stateMap($GUI_HIDE)
+						stateRcu($GUI_SHOW)
+						setRcu($i)
+					Case $treeLevel = 1
+						setRcu($i)
+					Case $treeLevel = 2
+						stateUni($GUI_HIDE)
+						stateRcu($GUI_SHOW)
+						setRcu($i)
+				EndSelect
+				$treeLevel = 1
+			Case $msg = $territoryMenuAuto[$i]
+				If $treeLevel = 1 Then GUICtrlSetState($territory[$i], $GUI_FOCUS)
+				If $auto[$i] <> 1 Then
+					$auto[$i] = 1
+					IniWrite($fileNetwork, $COM[$i + 1], "auto", "1")
+					GUICtrlSetState($rcuAutoOn, $GUI_CHECKED)
+					GUICtrlSetImage($mapIcon[$i], $fileMapIconNormal)
+					GUICtrlSetColor($territory[$i], 0x000000)
+					GUICtrlSetState($territoryMenuAuto[$i], $GUI_CHECKED)
+					newEvent($name[$i] & " (" & $COM[$i + 1] & ")|Автообновление включено")
+				Else
+					$auto[$i] = 0
+					IniWrite($fileNetwork, $COM[$i + 1], "auto", "0")
+					GUICtrlSetState($rcuAutoOff, $GUI_CHECKED)
+					GUICtrlSetImage($mapIcon[$i], $fileMapIconDisable)
+					GUICtrlSetColor($territory[$i], 0xc0c0c0)
+					GUICtrlSetState($territoryMenuAuto[$i], $GUI_UNCHECKED)
+					newEvent($name[$i] & " (" & $COM[$i + 1] & ")|Автообновление выключено")
+				EndIf
+			Case $msg = $territoryMenuRefresh[$i]
+				Select
+					Case $treeLevel = 0
+						stateMap($GUI_HIDE)
+						stateRcu($GUI_SHOW)
+						setRcu($i)
+					Case $treeLevel = 1
+						setRcu($i)
+					Case $treeLevel = 2
+						stateUni($GUI_HIDE)
+						stateRcu($GUI_SHOW)
+						setRcu($i)
+				EndSelect
+				$treeLevel = 1
+				unitRefresh($i)
+			Case $msg = $territoryMenuData[$i]
+				Select
+					Case $treeLevel = 0
+						stateMap($GUI_HIDE)
+						stateRcu($GUI_SHOW)
+						setRcu($i)
+					Case $treeLevel = 1
+						setRcu($i)
+					Case $treeLevel = 2
+						stateUni($GUI_HIDE)
+						stateRcu($GUI_SHOW)
+						setRcu($i)
+				EndSelect
+				$treeLevel = 1
+				rcuRefresh($i)
+			Case $msg = $mapIcon[$i]
+				GUICtrlSetState($territory[$i], $GUI_EXPAND)
+				GUICtrlSetState($territory[$i], $GUI_FOCUS)
+				stateMap($GUI_HIDE)
+				stateRcu($GUI_SHOW)
+				setRcu($i)
+				$treeLevel = 1
 		EndSelect
 		For $j = 1 To 31
 			Select
-				Case $msg = $treeunit[$i][$j]
-					unitdel()
-					unit($i, $j)
+				Case $msg = $territoryUni[$i][$j]
+					Select
+						Case $treeLevel = 0
+							stateMap($GUI_HIDE)
+							stateUni($GUI_SHOW)
+							setUni($i, $j)
+						Case $treeLevel = 1
+							stateRcu($GUI_HIDE)
+							stateUni($GUI_SHOW)
+							setUni($i, $j)
+						Case $treeLevel = 2
+							setUni($i, $j)
+					EndSelect
+					$treeLevel = 2
 			EndSelect
 		Next
 	Next
+	If $sec <> @SEC Then
+		GUICtrlSetData($statusBarTimer, timer($timer))
+	EndIf
 WEnd
 GUIDelete()
 Exit
+
+;~~~~~~~~~~~~~~~~~~~
+;~~~~~ ToolBar ~~~~~
+;~~~~~~~~~~~~~~~~~~~
+
+Func stateToolBar($state)
+	GUICtrlSetState($toolBarBtn1, $state)
+	GUICtrlSetState($toolBarLine1, $state)
+	GUICtrlSetState($toolBarBtn2, $state)
+	GUICtrlSetState($toolBarBtn3, $state)
+	GUICtrlSetState($toolBarLine, $state)
+EndFunc   ;==>stateToolBar
+
+;~~~~~~~~~~~~~~~~
+;~~~~~ Ping ~~~~~
+;~~~~~~~~~~~~~~~~
+
+Func menuServicePing() ;Меню -> Сервис -> Пинг...
+	GUICtrlSetData($statusBarState, "Пинг")
+	Dim $ping[$COM[0]]
+	$win = WinGetPos($programmName)
+	$pingWinW = 381
+	$pingWinH = $COM[0] * 16 + 130
+	$pingWinX = $win[0] + Int(($win[2] - $pingWinW) / 2)
+	$pingWinY = $win[1] + Int(($win[3] - $pingWinH) / 2)
+	If $pingWinX < 0 Then $pingWinX = 0
+	If $pingWinX + $pingWinW > @DesktopWidth Then $pingWinX = @DesktopWidth - $pingWinW
+	If $pingWinY < 0 Then $pingWinY = 0
+	If $pingWinY + $pingWinH > @DesktopHeight Then $pingWinY = @DesktopHeight - $pingWinH
+	$pingWin = GUICreate("Пинг - " & $programmName, $pingWinW, $pingWinH, $pingWinX, $pingWinY, 0x00080000, 0x00000000, $mainWin)
+	GUISetIcon($fileIcon)
+	GUICtrlCreateGroup("Время отклика УУ в сети " & IniRead($fileOptions, "main", "name", "Без имени"), 5, 3, $pingWinW - 16, $COM[0] * 16 + 56)
+	GUICtrlCreateLabel("Объект", 25, 28, 40, 15)
+	GUICtrlCreateLabel("IP-адрес", 193, 28, 45, 15)
+	GUICtrlCreateLabel("Пинг", 294, 28, 27, 15)
+	For $i = 0 To $COM[0] - 1
+		GUICtrlCreateLabel($name[$i] & " (" & $COM[$i + 1] & ")", 25, $i * 16 + 52, 150, 15)
+		GUICtrlCreateLabel($IP[$i], 193, $i * 16 + 52, 83, 15)
+		$ping[$i] = GUICtrlCreateLabel("Ждите...", 294, $i * 16 + 52, 64, 15)
+	Next
+	$pingClose = GUICtrlCreateButton("Закрыть", 292, $COM[0] * 16 + 72, 75, 23)
+	GUICtrlSetState(-1, $GUI_DEFBUTTON)
+	GUISetState(@SW_SHOW)
+	While 1
+		For $i = 0 To $COM[0] - 1
+			$sec = @SEC
+			$msg = GUIGetMsg(1)
+			Select
+				Case $msg[0] = $GUI_EVENT_CLOSE And $msg[1] = $pingWin
+					ExitLoop (2)
+				Case $msg[0] = $pingClose And $msg[1] = $pingWin
+					ExitLoop (2)
+			EndSelect
+			$ms = Ping($IP[$i], 500)
+			$error11 = @error
+			If $ms <> 0 Then
+				GUICtrlSetData($ping[$i], $ms & " мс")
+			Else
+				GUICtrlSetData($ping[$i], "Не отвечает")
+			EndIf
+			If $sec <> @SEC Then
+				GUICtrlSetData($statusBarTimer, timer($timer))
+			EndIf
+		Next
+	WEnd
+	GUIDelete()
+	ststusBarState()
+EndFunc   ;==>menuServicePing
+
+;~~~~~~~~~~~~~~~~~~~
+;~~~~~ Refresh ~~~~~
+;~~~~~~~~~~~~~~~~~~~
+
+Func rcuRefresh($i)
+	GUICtrlSetState($territory[$i], $GUI_FOCUS)
+	GUICtrlSetData($statusBarState, "Обновление данных УУ...")
+	GUICtrlSetColor($rcuInfoID, 0x808080)
+	GUICtrlSetColor($rcuInfoSN, 0x808080)
+	GUICtrlSetColor($rcuTempTP, 0x808080)
+	GUICtrlSetColor($rcuTempLM, 0x808080)
+	$portState = comConnect($i)
+	If $portState <> 0 Then
+		comSend("ID? ")
+		$getState = comGet($i)
+		If $getState <> "" Then
+			GUICtrlSetData($rcuProgress, 0)
+			GUICtrlSetState($rcuProgress, $GUI_SHOW)
+			$sendData = "ID? "
+			comSend($sendData)
+			Sleep(1000)
+			$iduu = comGetByte()
+			GUICtrlSetData($rcuProgress, 20)
+			$sendData = "SN? "
+			comSend($sendData)
+			Sleep(1000)
+			$snuu = comGetByte()
+			GUICtrlSetData($rcuProgress, 40)
+			$sendData = "TC? "
+			comSend($sendData)
+			Sleep(1000)
+			$temp = comGetByte()
+			GUICtrlSetData($rcuProgress, 60)
+			$sendData = "TP? "
+			comSend($sendData)
+			Sleep(1000)
+			$tpuu = comGetByte()
+			GUICtrlSetData($rcuProgress, 80)
+			comSend("END ")
+			comGet($i)
+			comSend("END ")
+			comGet($i)
+			comDisConnect()
+			GUICtrlSetData($rcuProgress, 90)
+			IniDelete($fileNetwork, $COM[$i + 1], "iduu")
+			IniDelete($fileNetwork, $COM[$i + 1], "snuu")
+			IniDelete($fileNetwork, $COM[$i + 1], "temp")
+			IniDelete($fileNetwork, $COM[$i + 1], "tpuu")
+			IniWrite($fileNetwork, $COM[$i + 1], "iduu", $iduu)
+			IniWrite($fileNetwork, $COM[$i + 1], "snuu", $snuu)
+			IniWrite($fileNetwork, $COM[$i + 1], "temp", $temp)
+			IniWrite($fileNetwork, $COM[$i + 1], "tpuu", $tpuu)
+			GUICtrlSetData($rcuProgress, 100)
+			load()
+			setRcu($i)
+			GUICtrlSetState($rcuProgress, $GUI_HIDE)
+		EndIf
+	EndIf
+	GUICtrlSetColor($rcuInfoID, 0x000000)
+	GUICtrlSetColor($rcuInfoSN, 0x000000)
+	GUICtrlSetColor($rcuTempTP, 0x000000)
+	GUICtrlSetColor($rcuTempLM, 0x000000)
+	ststusBarState()
+EndFunc   ;==>rcuRefresh
+
+Func unitRefresh($i)
+	GUICtrlSetState($territory[$i], $GUI_FOCUS)
+	GUICtrlSetData($statusBarState, "Обновление списка оборудования...")
+	$portState = comConnect($i)
+	If $portState <> 0 Then
+		comSend("ID? ")
+		$getState = comGet($i)
+		If $getState <> "" Then
+			For $z = 1 To 31
+				GUICtrlDelete($territoryUni[$i][$z])
+			Next
+			GUICtrlSetData($rcuProgress, 0)
+			GUICtrlSetState($rcuProgress, $GUI_SHOW)
+			comSend("ID? ")
+			comGet($i)
+			Dim $unitTmp[32]
+			Dim $snumTmp[32]
+			Dim $dataTmp[32]
+			Dim $statTmp[32]
+			Dim $lmtsTmp[32]
+			Dim $lsteTmp[32]
+			$k = 0
+			For $z = 1 To 31
+				$sendData = "CR" & Chr($z) & Chr(0x06)
+				comSend($sendData)
+				Sleep(1000)
+				$unitTmp[$z] = comGetByte()
+				GUICtrlSetData($rcuProgress, $z * 100 / 33)
+				If StringLeft($unitTmp[$z], 4) = "41FF" Then
+					$k = $k + 1
+					GUICtrlSetData($statusBarState, "Обновление списка оборудования... (Найдено устройств: " & $k & ")")
+					$sendData = "CR" & Chr($z) & Chr(0x04)
+					comSend($sendData)
+					Sleep(500)
+					$snumTmp[$z] = comGetByte()
+					$sendData = "CR" & Chr($z) & Chr(0x03)
+					comSend($sendData)
+					Sleep(500)
+					$dataTmp[$z] = comGetByte()
+					$sendData = "CR" & Chr($z) & Chr(0x09)
+					comSend($sendData)
+					Sleep(500)
+					$statTmp[$z] = comGetByte()
+					$sendData = "CR" & Chr($z) & Chr(0x0a)
+					comSend($sendData)
+					Sleep(500)
+					$lmtsTmp[$z] = comGetByte()
+					$sendData = "CR" & Chr($z) & Chr(0x07)
+					comSend($sendData)
+					Sleep(500)
+					$lsteTmp[$z] = comGetByte()
+				EndIf
+			Next
+			comSend("END ")
+			comGet($i)
+			comSend("END ")
+			comGet($i)
+			comDisConnect()
+			GUICtrlSetData($rcuProgress, 32 * 100 / 33)
+			For $k = 1 To 31
+				IniDelete($fileNetwork, $COM[$i + 1], "unit" & $k)
+				IniDelete($fileNetwork, $COM[$i + 1], "addr" & $k)
+				IniDelete($fileNetwork, $COM[$i + 1], "snum" & $k)
+				IniDelete($fileNetwork, $COM[$i + 1], "data" & $k)
+				IniDelete($fileNetwork, $COM[$i + 1], "stat" & $k)
+				IniDelete($fileNetwork, $COM[$i + 1], "lmts" & $k)
+				IniDelete($fileNetwork, $COM[$i + 1], "lste" & $k)
+			Next
+			$k = 1
+			For $z = 1 To 31
+				If StringLeft($unitTmp[$z], 4) = "41FF" Then
+					IniWrite($fileNetwork, $COM[$i + 1], "unit" & $k, $unitTmp[$z])
+					IniWrite($fileNetwork, $COM[$i + 1], "addr" & $k, "41FF" & Hex($z, 2) & "FF41FF5245414459")
+					IniWrite($fileNetwork, $COM[$i + 1], "snum" & $k, $snumTmp[$z])
+					IniWrite($fileNetwork, $COM[$i + 1], "data" & $k, $dataTmp[$z])
+					IniWrite($fileNetwork, $COM[$i + 1], "stat" & $k, $statTmp[$z])
+					IniWrite($fileNetwork, $COM[$i + 1], "lmts" & $k, $lmtsTmp[$z])
+					IniWrite($fileNetwork, $COM[$i + 1], "lste" & $k, $lsteTmp[$z])
+					$k = $k + 1
+				EndIf
+			Next
+			GUICtrlSetData($rcuProgress, 100)
+			load()
+			delTree()
+			$win = WinGetPos($programmName)
+			tree($dy)
+			setTree()
+			GUICtrlSetState($rcuProgress, $GUI_HIDE)
+			GUICtrlSetState($territory[$i], $GUI_EXPAND)
+			GUICtrlSetState($territory[$i], $GUI_FOCUS)
+		EndIf
+	EndIf
+	ststusBarState()
+EndFunc   ;==>unitRefresh
+
+;~~~~~~~~~~~~~~~~~
+;~~~~~ About ~~~~~
+;~~~~~~~~~~~~~~~~~
+
+Func menuHelpAbout() ;Меню -> Справка -> О программе
+	GUICtrlSetData($statusBarState, "О программе")
+	$win = WinGetPos($programmName)
+	$aboutWinW = 419
+	$aboutWinH = 347
+	$aboutWinX = $win[0] + Int(($win[2] - $aboutWinW) / 2)
+	$aboutWinY = $win[1] + Int(($win[3] - $aboutWinH) / 2)
+	If $aboutWinX < 0 Then $aboutWinX = 0
+	If $aboutWinX + $aboutWinW > @DesktopWidth Then $aboutWinX = @DesktopWidth - $aboutWinW
+	If $aboutWinY < 0 Then $aboutWinY = 0
+	If $aboutWinY + $aboutWinH > @DesktopHeight Then $aboutWinY = @DesktopHeight - $aboutWinH
+	$aboutWin = GUICreate("О программе """ & $programmName & """", $aboutWinW, $aboutWinH, $aboutWinX, $aboutWinY, 0x00000000, 0x00000000, $mainWin)
+	GUICtrlCreatePic($fileAboutLogo, 0, 0, 413, 77)
+	GUICtrlCreateIcon($fileIcon, -1, 11, 90)
+	GUICtrlCreateLabel($programmName, 52, 89, 133, 15)
+	GUICtrlCreateLabel("Версия 0.0.0.17 (beta)", 52, 106, 93, 15)
+	GUICtrlCreateLabel("ООО, 2009", 52, 122, 176, 15)
+	GUICtrlCreateLabel("mail-to: ", 52, 138, 126, 15)
+	GUICtrlSetColor(-1, 0x0000FF)
+	GUICtrlSetCursor(-1, 0)
+	GUICtrlCreateLabel("", 53, 239, 351, 2, $SS_SUNKEN)
+	$aboutOK = GUICtrlCreateButton("OK", 330, 289, 75, 23)
+	GUICtrlSetState(-1, $GUI_DEFBUTTON)
+	GUISetState(@SW_SHOW)
+	While 1
+		$sec = @SEC
+		$msg = GUIGetMsg(1)
+		Select
+			Case $msg[0] = $GUI_EVENT_CLOSE And $msg[1] = $aboutWin
+				ExitLoop
+			Case $msg[0] = $aboutOK And $msg[1] = $aboutWin
+				ExitLoop
+		EndSelect
+		If $sec <> @SEC Then
+			GUICtrlSetData($statusBarTimer, timer($timer))
+		EndIf
+	WEnd
+	GUIDelete()
+	ststusBarState()
+EndFunc   ;==>menuHelpAbout
+
+;~~~~~~~~~~~~~~~~
+;~~~~~ Tree ~~~~~
+;~~~~~~~~~~~~~~~~
+
+Func tree($dy)
+	$maintreeview = GUICtrlCreateTreeView(0, 32 + $dy, ($win[2] - $dwinw) - $mapw - 6, $maph + 4, BitOR($TVS_HASBUTTONS, $TVS_HASLINES, $TVS_DISABLEDRAGDROP, $TVS_SHOWSELALWAYS), $WS_EX_CLIENTEDGE)
+	GUICtrlSetResizing(-1, 550)
+EndFunc   ;==>tree
+
+Func posTree($dy)
+	GUICtrlSetPos($maintreeview, 0, 32 + $dy, ($win[2] - $dwinw) - $mapw - 6, $maph + 4)
+EndFunc   ;==>posTree
+
+Func setTree()
+	$treeview = GUICtrlCreateTreeViewItem(IniRead($fileOptions, "main", "name", "Без имени"), $maintreeview)
+	Dim $territory[$COM[0]], $territoryMenu[$COM[0]], $territoryMenuAuto[$COM[0]], $territoryMenuRefresh[$COM[0]], $territoryMenuData[$COM[0]]
+	Dim $territoryUni[$COM[0]][32]
+	For $i = 0 To $COM[0] - 1
+		$territory[$i] = GUICtrlCreateTreeViewItem($name[$i], $treeview)
+		GUICtrlSetColor(-1, 0xc0c0c0)
+		$territoryMenu[$i] = GUICtrlCreateContextMenu($territory[$i])
+		$territoryMenuData[$i] = GUICtrlCreateMenuItem("Обновить данные", $territoryMenu[$i])
+		$territoryMenuRefresh[$i] = GUICtrlCreateMenuItem("Обновить устройства", $territoryMenu[$i])
+		$territoryMenuAuto[$i] = GUICtrlCreateMenuItem("Автообновление", $territoryMenu[$i])
+		If $auto[$i] = 1 Then
+			GUICtrlSetState(-1, $GUI_CHECKED)
+			GUICtrlSetColor($territory[$i], 0x000000)
+		EndIf
+		For $j = 1 To 31
+			$territoryUni[$i][$j] = -1
+			If $unit[$i][$j] <> "" Then
+				$unitName = _HexToString($unit[$i][$j])
+				$unitName = StringSplit($unitName, " ")
+				If $unitName[1] <> "" Then $unitName[1] = StringTrimLeft($unitName[1], 2)
+				$territoryUni[$i][$j] = GUICtrlCreateTreeViewItem($unitName[1], $territory[$i])
+			EndIf
+		Next
+	Next
+	GUICtrlSetState($treeview, BitOR($GUI_EXPAND, $GUI_DEFBUTTON))
+EndFunc   ;==>setTree
+
+Func delTree()
+	GUICtrlDelete($maintreeview)
+EndFunc   ;==>delTree
+
+;~~~~~~~~~~~~~~~
+;~~~~~ Map ~~~~~
+;~~~~~~~~~~~~~~~
+
+Func map($dy)
+	$mapLable = GUICtrlCreateLabel("", ($win[2] - $dwinw) - $mapw - 4, 32 + $dy, $mapw + 4, $maph + 4, $SS_SUNKEN)
+	GUICtrlSetResizing(-1, 804)
+	GUICtrlSetState(-1, $GUI_DISABLE)
+	$mapPic = GUICtrlCreatePic($fileMapPic, ($win[2] - $dwinw) - $mapw - 2, 34 + $dy, $mapw, $maph)
+	GUICtrlSetResizing(-1, 804)
+	GUICtrlSetState(-1, $GUI_DISABLE)
+	Dim $mapIcon[$COM[0]]
+	For $i = 0 To $COM[0] - 1
+		$mapIcon[$i] = GUICtrlCreatePic($fileMapIconDisable, $win[2] - $mapw + $posIcon[$i][0] - 10, 34 + $dy + $posIcon[$i][1], 20, 20)
+		GUICtrlSetResizing(-1, 804)
+		GUICtrlSetCursor(-1, 0)
+		If $auto[$i] = 1 Then
+			GUICtrlSetImage(-1, $fileMapIconNormal)
+		EndIf
+	Next
+EndFunc   ;==>map
+
+Func stateMap($state)
+	GUICtrlSetState($mapLable, $state)
+	GUICtrlSetState($mapPic, $state)
+	For $i = 0 To $COM[0] - 1
+		GUICtrlSetState($mapIcon[$i], $state)
+	Next
+EndFunc   ;==>stateMap
+
+Func posMap($dy)                ;x								y			w			h
+	GUICtrlSetPos($mapLable, ($win[2] - $dwinw) - $mapw - 4, 32 + $dy, $mapw + 4, $maph + 4)
+	GUICtrlSetPos($mapPic, ($win[2] - $dwinw) - $mapw - 2, 34 + $dy, $mapw, $maph)
+	For $i = 0 To $COM[0] - 1
+		GUICtrlSetPos($mapIcon[$i], $win[2] - $mapw + $posIcon[$i][0] - 10, 34 + $dy + $posIcon[$i][1], 20, 20)
+	Next
+EndFunc   ;==>posMap
+
+Func delMap()
+	For $i = 0 To $COM[0] - 1
+		GUICtrlDelete($mapIcon[$i])
+	Next
+	GUICtrlDelete($mapPic)
+	GUICtrlDelete($mapLable)
+EndFunc   ;==>delMap
+
+;~~~~~~~~~~~~~~~~~
+;~~~~~ RCU-1 ~~~~~
+;~~~~~~~~~~~~~~~~~
+
+Func stateRcu($state)
+	GUICtrlSetState($rcuGroup, $state)
+	GUICtrlSetState($rcuInfo, $state)
+	GUICtrlSetState($rcuInfoIDlable, $state)
+	GUICtrlSetState($rcuInfoID, $state)
+	GUICtrlSetState($rcuInfoSNlable, $state)
+	GUICtrlSetState($rcuInfoSN, $state)
+	GUICtrlSetState($rcuTemp, $state)
+	GUICtrlSetState($rcuTempTPlable, $state)
+	GUICtrlSetState($rcuTempTP, $state)
+	GUICtrlSetState($rcuTempLMlable, $state)
+	GUICtrlSetState($rcuTempLM, $state)
+	GUICtrlSetState($rcuAuto, $state)
+	GUICtrlSetState($rcuAutoOn, $state)
+	GUICtrlSetState($rcuAutoOff, $state)
+EndFunc   ;==>stateRcu
+
+Func posRcu($dy)                    ;x						y				w			h
+	GUICtrlSetPos($rcuGroup, $win[2] - $mapw - 12, 34 + $dy, $mapw + 4, $maph + 2)
+	;Информация о УУ
+	GUICtrlSetPos($rcuInfo, $win[2] - $mapw - 4, 50 + $dy, $mapw - 12, 80)
+	GUICtrlSetPos($rcuInfoIDlable, $win[2] - $mapw + 16, 75 + $dy, 12, 15)
+	GUICtrlSetPos($rcuInfoID, $win[2] - $mapw + 60, 72 + $dy, 30, 20)
+	GUICtrlSetPos($rcuInfoSNlable, $win[2] - $mapw + 16, 99 + $dy, 16, 15)
+	GUICtrlSetPos($rcuInfoSN, $win[2] - $mapw + 60, 96 + $dy, 30, 20)
+	;Температура
+	GUICtrlSetPos($rcuTemp, $win[2] - $mapw - 4, 138 + $dy, $mapw - 12, 80)
+	GUICtrlSetPos($rcuTempTPlable, $win[2] - $mapw + 16, 163 + $dy, 38, 15)
+	GUICtrlSetPos($rcuTempTP, $win[2] - $mapw + 60, 160 + $dy, 30, 20)
+	GUICtrlSetPos($rcuTempLMlable, $win[2] - $mapw + 16, 187 + $dy, 33, 15)
+	GUICtrlSetPos($rcuTempLM, $win[2] - $mapw + 60, 184 + $dy, 30, 20)
+	;Автообновление
+	GUICtrlSetPos($rcuAuto, $win[2] - $mapw - 4, 226 + $dy, $mapw - 12, 80)
+	GUICtrlSetPos($rcuAutoOn, $win[2] - $mapw + 16, 251 + $dy, 41, 15)
+	GUICtrlSetPos($rcuAutoOff, $win[2] - $mapw + 16, 275 + $dy, 49, 15)
+	;Прогресс
+	GUICtrlSetPos($rcuProgress, $win[2] - $mapw - 4, $maph + 2 + $dy, $mapw - 12, 18)
+EndFunc   ;==>posRcu
+
+Func setRcu($i)
+	GUICtrlSetData($rcuGroup, $name[$i] & " (" & $COM[$i + 1] & ")")
+	GUICtrlSetData($rcuInfoID, comData(IniRead($fileNetwork, $COM[$i + 1], "iduu", "52454D4F54450D0A")))
+	GUICtrlSetData($rcuInfoSN, comData(IniRead($fileNetwork, $COM[$i + 1], "snuu", "52454D4F54450D0A")))
+	GUICtrlSetData($rcuTempTP, comData(IniRead($fileNetwork, $COM[$i + 1], "temp", "52454D4F54450D0A")))
+	GUICtrlSetData($rcuTempLM, comData(IniRead($fileNetwork, $COM[$i + 1], "tpuu", "52454D4F54450D0A")))
+	If Number(GUICtrlRead($rcuTempTP)) > Number(GUICtrlRead($rcuTempLM)) Then
+		GUICtrlSetBkColor($rcuTempTP, 0xFF0000)
+	Else
+		GUICtrlSetBkColor($rcuTempTP, -1)
+	EndIf
+	If $auto[$i] = 1 Then
+		GUICtrlSetState($rcuAutoOn, $GUI_CHECKED)
+	Else
+		GUICtrlSetState($rcuAutoOff, $GUI_CHECKED)
+	EndIf
+	$port = $i
+EndFunc   ;==>setRcu
+
+;~~~~~~~~~~~~~~~~
+;~~~~~ Unit ~~~~~
+;~~~~~~~~~~~~~~~~
+
+Func stateUni($state)
+	GUICtrlSetState($uniGroup, $state)
+	GUICtrlSetState($uniInfo, $state)
+	GUICtrlSetState($uniInfoIDlable, $state)
+	GUICtrlSetState($uniInfoID, $state)
+	GUICtrlSetState($uniInfoSNlable, $state)
+	GUICtrlSetState($uniInfoSN, $state)
+	GUICtrlSetState($uniInfoDElable, $state)
+	GUICtrlSetState($uniInfoDE, $state)
+	GUICtrlSetState($uniList, $state)
+EndFunc   ;==>stateUni
+
+Func posUni($dy)                    ;x						y			w			h
+	GUICtrlSetPos($uniGroup, $win[2] - $mapw - 12, 34 + $dy, $mapw + 4, $maph + 2)
+	;Информация о устройстве
+	GUICtrlSetPos($uniInfo, $win[2] - $mapw - 4, 50 + $dy, $mapw - 12, 80)
+	GUICtrlSetPos($uniInfoIDlable, $win[2] - $mapw + 16, 67 + $dy, 43, 15)
+	GUICtrlSetPos($uniInfoID, $win[2] - $mapw + 61, 67 + $dy, $mapw - 219, 15)
+	GUICtrlSetPos($uniInfoSNlable, $win[2] - 156, 67 + $dy, 90, 15)
+	GUICtrlSetPos($uniInfoSN, $win[2] - 64, 67 + $dy, 44, 15)
+	GUICtrlSetPos($uniInfoDElable, $win[2] - $mapw + 16, 83 + $dy, 54, 15)
+	GUICtrlSetPos($uniInfoDE, $win[2] - $mapw + 72, 83 + $dy, $mapw - 92, 41)
+	GUICtrlSetPos($uniList, $win[2] - $mapw - 4, 144 + $dy, $mapw - 12, $maph - 116)
+EndFunc   ;==>posUni
+
+Func setUni($i, $j)
+	GUICtrlSetData($uniGroup, $name[$i] & " (" & $COM[$i + 1] & ", адрес " & Dec(StringMid($addr[$i][$j], 5, 2)) & ")")
+	$unitName = _HexToString($unit[$i][$j])
+	$unitName = StringSplit($unitName, " ")
+	If $unitName[1] <> "" Then $unitName[1] = StringTrimLeft($unitName[1], 2)
+	GUICtrlSetData($uniInfoID, $unitName[1])
+	If StringLeft($snum[$i][$j], 4) = "41FF" Then
+		Dim $dataarray[6]
+		For $k = 0 To 5
+			$dataarray[$k] = StringMid($snum[$i][$j], $k * 2 + 5, 2)
+		Next
+		$unitSN = ""
+		For $k = 0 To 5
+			$unitSN = $unitSN & Number($dataarray[$k])
+		Next
+		GUICtrlSetData($uniInfoSN, $unitSN)
+	Else
+		GUICtrlSetData($uniInfoSN, "N/A")
+	EndIf
+	Select
+		Case StringLeft($unitName[1], 4) = "ACU3"
+			GUICtrlSetData($uniInfoDE, "Блок автоматического переключателя для коммутации ВЧ на уровне мощности до 30 Вт.")
+		Case StringLeft($unitName[1], 4) = "ALN2"
+			GUICtrlSetData($uniInfoDE, "Твердотельный усилитель мощности ТВ радиосигнала по уровню синхроимпульсов до 250 Вт.")
+		Case StringLeft($unitName[1], 4) = "ALN5"
+			GUICtrlSetData($uniInfoDE, "Твердотельный усилитель мощности ТВ радиосигнала по уровню синхроимпульсов до 500 Вт.")
+		Case StringLeft($unitName[1], 4) = "AN10"
+			GUICtrlSetData($uniInfoDE, "Твердотельный усилитель мощности ЧМ радиосигнала до 1000 Вт.")
+		Case StringLeft($unitName[1], 4) = "AN50"
+			GUICtrlSetData($uniInfoDE, "Твердотельный усилитель мощности ЧМ радиосигнала до 500 Вт.")
+		Case StringLeft($unitName[1], 4) = "TF25"
+			GUICtrlSetData($uniInfoDE, "Передатчик радиовещательный стационарный диапазона ОВЧ с номинальной выходной мощностью 250 Вт.")
+		Case StringLeft($unitName[1], 4) = "TF30"
+			GUICtrlSetData($uniInfoDE, "Передатчик радиовещательный стационарный диапазона ОВЧ с номинальной выходной мощностью 30 Вт.")
+		Case StringLeft($unitName[1], 4) = "TTU1"
+			GUICtrlSetData($uniInfoDE, "Передатчик телевизионный с выходной мощностью по уровню синхроимпульсов 1000 Вт.")
+		Case StringLeft($unitName[1], 4) = "TTU2"
+			GUICtrlSetData($uniInfoDE, "Передатчик телевизионный с выходной мощностью по уровню синхроимпульсов 2 Вт.")
+		Case Else
+			GUICtrlSetData($uniInfoDE, "Неизвестное устройство.")
+	EndSelect
+	_GUICtrlListView_DeleteAllItems($uniList)
+	If $auto[$i] <> 0 Then
+		Dim $channel[1]
+		$uniListData = _HexToString($unit[$i][$j])
+		$uniListData = StringSplit($uniListData, " ")
+		$z = 1
+		For $k = 2 To $uniListData[0] - 1
+			If StringInStr($uniListData[$k], "{") <> 0 Then
+				_ArrayAdd($channel, $uniListData[$k])
+				$k = $k + 1
+				For $k = $k To $uniListData[0] - 1
+					If StringInStr($uniListData[$k], "}") <> 0 Then
+						$channel[$z] = $channel[$z] & " " & $uniListData[$k]
+						$z = $z + 1
+						ExitLoop
+					Else
+						$channel[$z] = $channel[$z] & " " & $uniListData[$k]
+					EndIf
+				Next
+			Else
+				_ArrayAdd($channel, $uniListData[$k])
+				$z = $z + 1
+			EndIf
+		Next
+		$channel[0] = $z - 1
+		Dim $ch2D[$uniListData[0] - 1][4]
+		$z = 1
+		For $k = 0 To $channel[0] - 1
+			$tmp = StringSplit($channel[$k + 1], "}-")
+			If StringInStr($tmp[1], "{") <> 0 Then
+				$tmp2 = StringSplit(StringTrimLeft($tmp[1], 1), " ")
+				For $m = 1 To $tmp2[0]
+					$ch2D[$z][0] = $tmp[0]
+					$ch2D[$z][1] = $tmp2[$m]
+					$ch2D[$z][2] = $tmp[2]
+					$ch2D[$z][3] = $tmp[3]
+					$z = $z + 1
+				Next
+			Else
+				For $m = 0 To 3
+					$ch2D[$z][$m] = $tmp[$m]
+				Next
+				$z = $z + 1
+			EndIf
+		Next
+		;Значение
+		If $z > 1 Then
+			$ch2D[0][1] = $z - 1
+			If StringLeft($data[$i][$j], 4) = "41FF" Then
+				$unitData = StringTrimLeft($data[$i][$j], 4)
+				$unitData = StringTrimRight($unitData, 16)
+				$n = StringLen($unitData) / 2
+				If $n > 0 Then
+					Dim $dataarray[$n]
+					For $k = 0 To $n - 1
+						$dataarray[$k] = StringMid($unitData, $k * 2 + 1, 2)
+					Next
+					Dim $var[$ch2D[0][1]]
+					$z = 0
+					For $k = 1 To $ch2D[0][1]
+						Select
+							Case $ch2D[$k][2] = "AF2L1"
+								$var[$k - 1] = Dec($dataarray[$z]) * 1 + Dec($dataarray[$z + 1]) * 0.1
+								$z = $z + 2
+							Case $ch2D[$k][2] = "AOL0"
+								$var[$k - 1] = Dec($dataarray[$z]) * 1
+								$z = $z + 1
+							Case $ch2D[$k][2] = "AOL1"
+								$var[$k - 1] = Dec($dataarray[$z]) * 0.1
+								$z = $z + 1
+							Case $ch2D[$k][2] = "AVL0"
+								$var[$k - 1] = Dec($dataarray[$z] & $dataarray[$z + 1]) * 1
+								$z = $z + 2
+							Case $ch2D[$k][2] = "AVL1"
+								$var[$k - 1] = Dec($dataarray[$z] & $dataarray[$z + 1]) * 0.1
+								$z = $z + 2
+							Case $ch2D[$k][2] = "AVL2"
+								$var[$k - 1] = Dec($dataarray[$z] & $dataarray[$z + 1]) * 0.01
+								$z = $z + 2
+							Case $ch2D[$k][2] = "AVL3"
+								$var[$k - 1] = Dec($dataarray[$z] & $dataarray[$z + 1]) * 0.001
+								$z = $z + 2
+							Case $ch2D[$k][2] = "AVR0"
+								$var[$k - 1] = Dec($dataarray[$z] & $dataarray[$z + 1]) * 1
+								$z = $z + 2
+							Case $ch2D[$k][2] = "AVR1"
+								$var[$k - 1] = Dec($dataarray[$z] & $dataarray[$z + 1]) * 10
+								$z = $z + 2
+							Case $ch2D[$k][2] = "C"
+								If $dataarray[$z] = "00" Then
+									$var[$k - 1] = "норма"
+								Else
+									$var[$k - 1] = "-"
+								EndIf
+								$z = $z + 1
+							Case Else
+								;MsgBox(0,"","Не знаю такого")
+								$var[$k - 1] = "N/A"
+						EndSelect
+					Next
+				EndIf
+				;Пределы
+				;_ArrayDisplay($var)
+				$limits = limUni($i, $j, $ch2D[0][1])
+				For $k = 1 To $ch2D[0][1]
+					GUICtrlCreateListViewItem($k & "|" & $ch2D[$k][1] & "|" & $var[$k - 1] & "|" & $ch2D[$k][3] & "|" & $limits[$k - 1][0] & "|" & $limits[$k - 1][1], $uniList)
+					If $ch2D[$k][1] = "T" Or $ch2D[$k][1] = "T1" Or $ch2D[$k][1] = "T2" Or $ch2D[$k][1] = "Uбат" Then
+						If $limits[$k - 1][0] <> "-" And $var[$k - 1] < $limits[$k - 1][0] Then ;critical
+							GUICtrlSetBkColor(-1, 0xFF0000)
+						EndIf
+						If $limits[$k - 1][1] <> "-" And $var[$k - 1] > $limits[$k - 1][1] Then ;critical
+							GUICtrlSetBkColor(-1, 0xFF0000)
+						EndIf
+					Else
+						If $limits[$k - 1][0] <> "-" And $var[$k - 1] > $limits[$k - 1][0] Then ;minor
+							GUICtrlSetBkColor(-1, 0xffba75)
+						EndIf
+						If $limits[$k - 1][1] <> "-" And $var[$k - 1] > $limits[$k - 1][1] Then ;critical
+							GUICtrlSetBkColor(-1, 0xFF0000)
+						EndIf
+					EndIf
+				Next
+			Else
+				GUICtrlCreateListViewItem("-|-|-|-|-|-", $uniList)
+			EndIf
+		EndIf
+	EndIf
+EndFunc   ;==>setUni
+
+Func limUni($i, $j, $n) ;Пределы
+	$error11 = "Ошибка в определении пределов."
+	Dim $limits[$n][2]
+	If $lmts[$i][$j] <> "" Then
+		$z = 0
+		$unitLmts = StringTrimLeft($lmts[$i][$j], 4)
+		$unitLmts = StringTrimRight($unitLmts, 16)
+		$strlmts = StringSplit(_HexToString($unitLmts), " ")
+		For $k = 1 To $strlmts[0]
+			If $strlmts[$k] <> "" Then
+				$chrlmts = StringSplit($strlmts[$k], "")
+				Select
+					Case $chrlmts[0] = 5 And $chrlmts[1] = "1"
+						Select
+							Case $chrlmts[2] = "B"
+								Select
+									Case $chrlmts[4] = "*"
+										$lim = Asc($chrlmts[3]) * Asc($chrlmts[5])
+									Case $chrlmts[4] = "/"
+										$lim = Asc($chrlmts[3]) / Asc($chrlmts[5])
+									Case Else
+										error($error11, $COM[$i + 1], $unit[$i][$j])
+								EndSelect
+								$limits[$z][0] = "-"
+								$limits[$z][1] = $lim
+								$z = $z + 1
+								;MsgBox(0,"Один предел","Верхний = " & $lim)
+							Case $chrlmts[2] = "H"
+								Select
+									Case $chrlmts[4] = "*"
+										$lim = Asc($chrlmts[3]) * Asc($chrlmts[5])
+									Case $chrlmts[4] = "/"
+										$lim = Asc($chrlmts[3]) / Asc($chrlmts[5])
+									Case Else
+										error($error11, $COM[$i + 1], $unit[$i][$j])
+								EndSelect
+								$limits[$z][0] = $lim
+								$limits[$z][1] = "-"
+								$z = $z + 1
+								;MsgBox(0,"Один предел","Нижний = " & $lim)
+							Case Else
+								error($error11, $COM[$i + 1], $unit[$i][$j])
+						EndSelect
+					Case $chrlmts[0] = 8 And $chrlmts[1] = "1"
+						Select
+							Case $chrlmts[2] = "B"
+								Select
+									Case $chrlmts[4] = "*"
+										$lim = Asc($chrlmts[3]) * Asc($chrlmts[5])
+									Case $chrlmts[4] = "/"
+										$lim = Asc($chrlmts[3]) / Asc($chrlmts[5])
+									Case Else
+										error($error11, $COM[$i + 1], $unit[$i][$j])
+								EndSelect
+								$n = Asc($chrlmts[7])
+								For $m = 0 To $n - 1
+									$limits[$z + $m][0] = "-"
+									$limits[$z + $m][1] = $lim
+								Next
+								$z = $z + $n
+								;MsgBox(0,"Один повторяющийся предел","Верхний = " & $lim & @CRLF & "Повторяется " & $n & " раз(а)")
+							Case $chrlmts[2] = "H"
+								Select
+									Case $chrlmts[4] = "*"
+										$lim = Asc($chrlmts[3]) * Asc($chrlmts[5])
+									Case $chrlmts[4] = "/"
+										$lim = Asc($chrlmts[3]) / Asc($chrlmts[5])
+									Case Else
+										error($error11, $COM[$i + 1], $unit[$i][$j])
+								EndSelect
+								$n = Asc($chrlmts[7])
+								For $m = 0 To $n - 1
+									$limits[$z + $m][0] = $lim
+									$limits[$z + $m][1] = "-"
+								Next
+								$z = $z + $n
+								;MsgBox(0,"Один повторяющийся предел","Нижний = " & $lim & @CRLF & "Повторяется " & $n & " раз(а)")
+							Case Else
+								error($error11, $COM[$i + 1], $unit[$i][$j])
+						EndSelect
+					Case $chrlmts[0] = 9 And $chrlmts[1] = "2"
+						Select
+							Case $chrlmts[4] = "*"
+								$limB = Asc($chrlmts[3]) * Asc($chrlmts[5])
+							Case $chrlmts[4] = "/"
+								$limB = Asc($chrlmts[3]) / Asc($chrlmts[5])
+						EndSelect
+						Select
+							Case $chrlmts[8] = "*"
+								$limH = Asc($chrlmts[7]) * Asc($chrlmts[9])
+							Case $chrlmts[8] = "/"
+								$limH = Asc($chrlmts[7]) / Asc($chrlmts[9])
+						EndSelect
+						$limits[$z][0] = $limH
+						$limits[$z][1] = $limB
+						$z = $z + 1
+						;MsgBox(0,"Два предела","Верхний = " & $limB & @CRLF & "Нижний = " & $limH)
+					Case $chrlmts[0] = 1 And $chrlmts[1] = "P"
+						;$n = 1
+						$limits[$z][0] = "-"
+						$limits[$z][1] = "-"
+						$z = $z + 1
+						;MsgBox(0,"Пропуск","Количество = " & $n)
+					Case $chrlmts[0] = 4 And $chrlmts[1] = "P"
+						$n = Asc($chrlmts[3])
+						For $m = 0 To $n - 1
+							$limits[$z + $m][0] = "-"
+							$limits[$z + $m][1] = "-"
+						Next
+						$z = $z + $n
+						;MsgBox(0,"Пропуск","Количество = " & $n)
+					Case Else
+						error($error11, $COM[$i + 1], $unit[$i][$j])
+				EndSelect
+			EndIf
+		Next
+	EndIf
+	;_ArrayDisplay($limits)
+	Return $limits
+EndFunc   ;==>limUni
+
+Func error($error11, $COM, $unit)
+	$unitName = _HexToString($unit)
+	$unitName = StringSplit($unitName, " ")
+	If $unitName[1] <> "" Then $unitName[1] = StringTrimLeft($unitName[1], 2)
+	MsgBox(8208, $programmName, $error11 & @CRLF & @CRLF _
+			 & "Порт: " & $COM & @CRLF _
+			 & "Устройство: " & $unitName[1], 5)
+EndFunc   ;==>error
+
+;~~~~~~~~~~~~~~~~
+;~~~~~ List ~~~~~
+;~~~~~~~~~~~~~~~~
+
+Func posList($dy, $dh)
+	If BitAND(GUICtrlRead($menuViewStyleWinXP), $GUI_CHECKED) = $GUI_CHECKED Then $dh = $dh - 7
+	GUICtrlSetPos($list, 0, 38 + $dy + $maph, ($win[2] - $dwinw), ($win[3] - $dwinh) - $maph - 77 - $dy + $dh)
+EndFunc   ;==>posList
+
+Func newEvent($event)
+	$newEvent = date() & "|" & $event
+	$fileList = FileOpen($fileEvents, 1)
+	FileWriteLine($fileList, $newEvent)
+	FileClose($fileList)
+EndFunc   ;==>newEvent
+
+Func date()
+;~ 	Select
+;~ 	Case @MON = 1
+;~ 		$mon = "Янв"
+;~ 	Case @MON = 2
+;~ 		$mon = "Фев"
+;~ 	Case @MON = 3
+;~ 		$mon = "Мар"
+;~ 	Case @MON = 4
+;~ 		$mon = "Апр"
+;~ 	Case @MON = 5
+;~ 		$mon = "Май"
+;~ 	Case @MON = 6
+;~ 		$mon = "Июн"
+;~ 	Case @MON = 7
+;~ 		$mon = "Июл"
+;~ 	Case @MON = 8
+;~ 		$mon = "Авг"
+;~ 	Case @MON = 9
+;~ 		$mon = "Сен"
+;~ 	Case @MON = 10
+;~ 		$mon = "Окт"
+;~ 	Case @MON = 11
+;~ 		$mon = "Ноя"
+;~ 	Case @MON = 12
+;~ 		$mon = "Дек"
+;~ 	EndSelect
+	$date = @YEAR & "." & @MON & "." & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC
+	Return $date
+EndFunc   ;==>date
+
+;~~~~~~~~~~~~~~~~~~~~~
+;~~~~~ StatusBar ~~~~~
+;~~~~~~~~~~~~~~~~~~~~~
+
+Func stateStatusBar($state)
+	GUICtrlSetState($statusBarState, $state)
+	GUICtrlSetState($statusBarAlarm, $state)
+	GUICtrlSetState($statusBarTimer, $state)
+EndFunc   ;==>stateStatusBar
+
+;~~~~~~~~~~~~~~~~~
+;~~~~~ Timer ~~~~~
+;~~~~~~~~~~~~~~~~~
+
+Func timer($timer)
+	$uptime = TimerDiff($timer)
+	$uph = Int($uptime / 3600000)
+	$upm = Int($uptime / 60000) - Int($uptime / 3600000) * 60
+	If $upm < 10 Then $upm = "0" & $upm
+	$ups = Int($uptime / 1000) - Int($uptime / 60000) * 60
+	If $ups < 10 Then $ups = "0" & $ups
+	Return $uph & ":" & $upm & ":" & $ups & " "
+EndFunc   ;==>timer
+
+;~~~~~~~~~~~~~~~~~
+;~~~~~ Close ~~~~~
+;~~~~~~~~~~~~~~~~~
+
+Func close() ;сохранение размеров и позиции главного окна
+	$win = WinGetPos($programmName)
+	$winWH = 0
+	$winTB = 0
+	$winSB = 0
+	$winStyle = 0
+	If $win[2] = @DesktopWidth + $dwinw Then
+		$winWH = 1
+	Else
+		IniWrite($fileOptions, "main", "winw", $win[2])
+		If BitAND(GUICtrlRead($menuViewStyleWinXP), $GUI_CHECKED) = $GUI_CHECKED Then $win[3] = $win[3] - 7
+		IniWrite($fileOptions, "main", "winh", $win[3])
+		IniWrite($fileOptions, "main", "winx", $win[0])
+		IniWrite($fileOptions, "main", "winy", $win[1])
+	EndIf
+	If BitAND(GUICtrlRead($menuViewToolBar), $GUI_CHECKED) = $GUI_CHECKED Then $winTB = 2
+	If BitAND(GUICtrlRead($menuViewStatusBar), $GUI_CHECKED) = $GUI_CHECKED Then $winSB = 4
+	If BitAND(GUICtrlRead($menuViewStyleWinXP), $GUI_CHECKED) = $GUI_CHECKED Then $winStyle = 8
+	IniWrite($fileOptions, "main", "winz", $winWH + $winTB + $winSB + $winStyle)
+	newEvent("|Выход из системы")
+EndFunc   ;==>close
+
+;~~~~~~~~~~~~~~~~~~~~
+;~~~~~ DECtoBIN ~~~~~
+;~~~~~~~~~~~~~~~~~~~~
+
+Func DECtoBIN($number, $n) ;преобразование десятичного параметра в бинарный вид
+	Dim $result[$n]
+	For $i = $n - 1 To 0 Step -1
+		If $number - 2 ^ $i >= 0 Then
+			$number = $number - 2 ^ $i
+			$result[$i] = 1
+		Else
+			$result[$i] = 0
+		EndIf
+	Next
+	Return $result
+EndFunc   ;==>DECtoBIN
+
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;~~~~~ Готово/Мониторинг ~~~~~
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Func ststusBarState()
+	If $monitoring = 0 Then
+		GUICtrlSetData($statusBarState, "Стоп")
+	Else
+		GUICtrlSetData($statusBarState, "Мониторинг")
+	EndIf
+EndFunc   ;==>ststusBarState
+
+;~~~~~~~~~~~~~~~~
+;~~~~~ Load ~~~~~
+;~~~~~~~~~~~~~~~~
+
+Func load()
+	$COM = IniReadSectionNames($fileNetwork)
+	Dim $name[$COM[0]]
+	Dim $IP[$COM[0]]
+	Dim $auto[$COM[0]]
+	Dim $posIcon[$COM[0]][2]
+	Dim $unit[$COM[0]][32]
+	Dim $addr[$COM[0]][32]
+	Dim $snum[$COM[0]][32]
+	Dim $data[$COM[0]][32]
+	Dim $stat[$COM[0]][32]
+	Dim $lmts[$COM[0]][32]
+	Dim $lste[$COM[0]][32]
+	For $i = 0 To $COM[0] - 1
+		$name[$i] = IniRead($fileNetwork, $COM[$i + 1], "name", $COM[$i + 1])
+		$IP[$i] = IniRead($fileNetwork, $COM[$i + 1], "IP", "N/A")
+		$auto[$i] = IniRead($fileNetwork, $COM[$i + 1], "auto", 0)
+		$posIcon[$i][0] = IniRead($fileNetwork, $COM[$i + 1], "mapX", 0)
+		$posIcon[$i][1] = IniRead($fileNetwork, $COM[$i + 1], "mapY", 0)
+		For $j = 1 To 31
+			$unit[$i][$j] = IniRead($fileNetwork, $COM[$i + 1], "unit" & $j, "")
+			$addr[$i][$j] = IniRead($fileNetwork, $COM[$i + 1], "addr" & $j, "")
+			$snum[$i][$j] = IniRead($fileNetwork, $COM[$i + 1], "snum" & $j, "")
+			$data[$i][$j] = IniRead($fileNetwork, $COM[$i + 1], "data" & $j, "")
+			$stat[$i][$j] = IniRead($fileNetwork, $COM[$i + 1], "stat" & $j, "")
+			$lmts[$i][$j] = IniRead($fileNetwork, $COM[$i + 1], "lmts" & $j, "")
+			$lste[$i][$j] = IniRead($fileNetwork, $COM[$i + 1], "lste" & $j, "")
+		Next
+	Next
+EndFunc   ;==>load
+
+Func loadMap()
+	$COM = IniReadSectionNames($fileNetwork)
+	Dim $auto[$COM[0]]
+	Dim $posIcon[$COM[0]][2]
+	For $i = 0 To $COM[0] - 1
+		$auto[$i] = IniRead($fileNetwork, $COM[$i + 1], "auto", 0)
+		$posIcon[$i][0] = IniRead($fileNetwork, $COM[$i + 1], "mapX", 0)
+		$posIcon[$i][1] = IniRead($fileNetwork, $COM[$i + 1], "mapY", 0)
+	Next
+EndFunc   ;==>loadMap
+
+;*************************************************************************************
+;********** COM ********** COM ********** COM ********** COM ********** COM **********
+;*************************************************************************************
+
+Func comConnect($i)
+	$sErr = 2
+	$portState = _CommSetPort(StringTrimLeft($COM[$i + 1], 3), $sErr, 19200, 8, 0, 1, 0)
+	If $portState = 0 Then
+		GUICtrlSetData($statusBarState, "Ошибка!")
+		newEvent($name[$i] & " (" & $COM[$i + 1] & ")|" & $sErr)
+		MsgBox(8208, $programmName, "Ошибка соединения с COM-портом." & @CRLF & @CRLF _
+				 & "Порт: " & $COM[$i + 1] & @CRLF _
+				 & "Ошибка: " & $sErr & ".", 5)
+	EndIf
+	Return $portState
+EndFunc   ;==>comConnect
+
+Func comDisConnect()
+	_CommClosePort()
+EndFunc   ;==>comDisConnect
+
+Func comSend($tx)
+	$chr = StringSplit($tx & Chr(0x00) & Chr(0x8C), "")
+	Dim $dec[$chr[0]], $bin[$chr[0]][8]
+	For $i = 1 To $chr[0]
+		$dec[$i - 1] = Asc($chr[$i])
+		For $j = 7 To 0 Step -1
+			If $dec[$i - 1] - 2 ^ $j + 1 > 0 Then
+				$bin[$i - 1][$j] = 1
+				$dec[$i - 1] = $dec[$i - 1] - 2 ^ $j
+			Else
+				$bin[$i - 1][$j] = 0
+			EndIf
+		Next
+	Next
+	Dim $msg[1]
+	For $i = 1 To $chr[0] - 1
+		For $j = 0 To 7
+			_ArrayAdd($msg, $bin[$i - 1][$j])
+		Next
+	Next
+	Dim $reg[8], $regtmp[8]
+	For $i = 0 To 7
+		$reg[$i] = $msg[$i + 1]
+	Next
+	For $k = 1 To ($chr[0] - 2) * 8
+		If $reg[0] = 1 Then
+			For $i = 0 To 6
+				$reg[$i] = $reg[$i + 1]
+			Next
+			$reg[7] = $msg[$k + 8]
+			For $i = 0 To 7
+				If ($reg[$i] = 0) And ($bin[$chr[0] - 1][$i] = 0) Then
+					$regtmp[$i] = 0
+				ElseIf ($reg[$i] = 1) And ($bin[$chr[0] - 1][$i] = 1) Then
+					$regtmp[$i] = 0
+				Else
+					$regtmp[$i] = 1
+				EndIf
+			Next
+			For $i = 0 To 7
+				$reg[$i] = $regtmp[$i]
+			Next
+		Else
+			For $i = 0 To 6
+				$reg[$i] = $reg[$i + 1]
+			Next
+			$reg[7] = $msg[$k + 8]
+		EndIf
+	Next
+	$dec = 0
+	For $i = 7 To 0 Step -1
+		$dec = $dec + $reg[$i] * 2 ^ $i
+	Next
+	$crc = $tx & Chr($dec)
+	_CommSendString($crc, 0)
+EndFunc   ;==>comSend
+
+Func comGet($i)
+	$wait = 10
+	While $wait > 0
+		$rx = _CommGetString()
+		If StringLen($rx) <> 0 Then ExitLoop
+		If $sec <> @SEC Then
+			GUICtrlSetData($statusBarTimer, timer($timer))
+			$wait = $wait - 1
+		EndIf
+		$sec = @SEC
+	WEnd
+	If $rx = "" Then
+		GUICtrlSetData($statusBarState, "Ошибка!")
+		newEvent($name[$i] & " (" & $COM[$i + 1] & ")|УУ не отвечает")
+		MsgBox(8208, $programmName, "УУ не отвечает, возможно нет подключения.", 5)
+	EndIf
+	Return $rx
+EndFunc   ;==>comGet
+
+Func comGetByte()
+	$chr = _CommReadByte(1)
+	$rx = Hex($chr, 2)
+	While 1
+		$chr = _CommReadByte(0)
+		If $chr = "" Then
+			ExitLoop
+		EndIf
+		$rx = $rx & Hex($chr, 2)
+	WEnd
+	Return $rx
+EndFunc   ;==>comGetByte
+
+Func comData($hexData)
+	$result = "Error"
+	$strData = _HexToString($hexData)
+	$cmd = StringSplit($strData, "=")
+	If $cmd[0] = 3 Then $cmd[2] = $cmd[2] & "="
+	If $cmd[0] = 4 Then $cmd[2] = $cmd[2] & $cmd[3]
+	If @error = 0 Then
+		$chr = StringSplit($cmd[1] & "=" & StringRight($strData, 1) & Chr(0x00) & Chr(0x8C), "") ;00000000 & reverse polynom
+		Dim $dec[$chr[0]], $bin[$chr[0]][8]
+		For $i = 1 To $chr[0]
+			$dec[$i - 1] = Asc($chr[$i])
+			For $j = 7 To 0 Step -1
+				If $dec[$i - 1] - 2 ^ $j + 1 > 0 Then
+					$bin[$i - 1][$j] = 1
+					$dec[$i - 1] = $dec[$i - 1] - 2 ^ $j
+				Else
+					$bin[$i - 1][$j] = 0
+				EndIf
+			Next
+		Next
+		Dim $msg[1]
+		For $i = 1 To $chr[0] - 1
+			For $j = 0 To 7
+				_ArrayAdd($msg, $bin[$i - 1][$j])
+			Next
+		Next
+		Dim $reg[8], $regtmp[8]
+		For $i = 0 To 7
+			$reg[$i] = $msg[$i + 1]
+		Next
+		For $k = 1 To ($chr[0] - 2) * 8
+			If $reg[0] = 1 Then
+				For $i = 0 To 6
+					$reg[$i] = $reg[$i + 1]
+				Next
+				$reg[7] = $msg[$k + 8]
+				For $i = 0 To 7
+					If ($reg[$i] = 0) And ($bin[$chr[0] - 1][$i] = 0) Then
+						$regtmp[$i] = 0
+					ElseIf ($reg[$i] = 1) And ($bin[$chr[0] - 1][$i] = 1) Then
+						$regtmp[$i] = 0
+					Else
+						$regtmp[$i] = 1
+					EndIf
+				Next
+				For $i = 0 To 7
+					$reg[$i] = $regtmp[$i]
+				Next
+			Else
+				For $i = 0 To 6
+					$reg[$i] = $reg[$i + 1]
+				Next
+				$reg[7] = $msg[$k + 8]
+			EndIf
+		Next
+		$crc = 0
+		For $i = 7 To 0 Step -1
+			$crc = $crc + $reg[$i] * 2 ^ $i
+		Next
+		If $crc = 0 Then
+			;MsgBox(0,"","Правильно")
+			$rx = StringTrimRight($cmd[2], 1)
+			$rxchr = StringSplit($cmd[2], "")
+			Select
+				Case $cmd[1] = "ALARM"
+					If Asc($rxchr[1]) = 0 Then
+						MsgBox(0, "", "Ошибки нет")
+					Else
+						MsgBox(0, "", "Ошибка передатчика №" & Asc($rxchr[2]))
+					EndIf
+				Case $cmd[1] = "AM"
+					Dim $dec[2], $bin[2][8], $am[2][8]
+					For $i = 1 To 2
+						$dec[$i - 1] = Asc($rxchr[$i])
+						For $j = 7 To 0 Step -1
+							If $dec[$i - 1] - 2 ^ $j + 1 > 0 Then
+								$bin[$i - 1][$j] = 1
+								$dec[$i - 1] = $dec[$i - 1] - 2 ^ $j
+							Else
+								$bin[$i - 1][$j] = 0
+							EndIf
+						Next
+					Next
+					For $i = 0 To 1
+						For $j = 0 To 7
+							If $bin[$i][$j] = 0 Then
+								$am[$i][$j] = "Выкл"
+							Else
+								$am[$i][$j] = "Вкл"
+							EndIf
+						Next
+					Next
+					MsgBox(0, "", "Сработал внешний датчик №1 " & $am[1][0] & @CRLF & _
+							"Сработал внешний датчик №2 " & $am[1][1] & @CRLF & _
+							"Авария одного из подключенных блоков Микротек " & $am[1][2] & @CRLF & _
+							"Пропала связь с одним из подключенных блоков Микротек " & $am[1][3] & @CRLF & _
+							"Нет видеосигнала на входах контроля видеосигнала №1 " & $am[1][4] & @CRLF & _
+							"Нет видеосигнала на входах контроля видеосигнала №2 " & $am[1][5] & @CRLF & _
+							"Нет видеосигнала на входах контроля видеосигнала №3 " & $am[1][6] & @CRLF & _
+							"Нет видеосигнала на входах контроля видеосигнала №4 " & $am[1][7] & @CRLF & _
+							"Превышен порог датчика температуры" & $am[0][0] & @CRLF & _
+							"Зарезервировано " & $am[0][1] & @CRLF & _
+							"Зарезервировано " & $am[0][2] & @CRLF & _
+							"Зарезервировано " & $am[0][3] & @CRLF & _
+							"Зарезервировано " & $am[0][4] & @CRLF & _
+							"Зарезервировано " & $am[0][5] & @CRLF & _
+							"Зарезервировано " & $am[0][6] & @CRLF & _
+							"Зарезервировано " & $am[0][7])
+				Case $cmd[1] = "ID"
+					$id = Asc($rx)
+					;MsgBox(0,"",$id)
+					$result = $id
+				Case $cmd[1] = "NE"
+					$ne = Asc($rx)
+					MsgBox(0, "", $ne)
+				Case $cmd[1] = "NT"
+					$nt = Asc($rx)
+					MsgBox(0, "", $nt)
+				Case $cmd[1] = "OUT"
+					$out = Asc($rx)
+					MsgBox(0, "", $out)
+				Case $cmd[1] = "PC"
+					$pc = Asc($rx)
+					MsgBox(0, "", $pc)
+				Case $cmd[1] = "PS"
+					$ps = Asc($rx)
+					MsgBox(0, "", $ps)
+				Case $cmd[1] = "PT"
+					$pt = Asc($rx)
+					MsgBox(0, "", $pt)
+				Case $cmd[1] = "RS"
+					MsgBox(0, "", "Чтение состояния передатчиков (Не реализовано)")
+				Case $cmd[1] = "SN"
+					$sn = $rxchr[1] & $rxchr[2]
+					;MsgBox(0,"",$sn)
+					$result = $sn
+				Case $cmd[1] = "TEL"
+					$tel = ""
+					For $i = 1 To Asc($rxchr[1])
+						$tel = $tel & Asc($rxchr[$i + 1])
+					Next
+					MsgBox(0, "", $tel)
+				Case $cmd[1] = "SW"
+					Dim $bin[8], $sw[8]
+					$dec = Asc($cmd[2])
+					For $j = 7 To 0 Step -1
+						If $dec - 2 ^ $j + 1 > 0 Then
+							$bin[$j] = 1
+							$dec = $dec - 2 ^ $j
+						Else
+							$bin[$j] = 0
+						EndIf
+					Next
+					For $j = 0 To 7
+						If $bin[$j] = 0 Then
+							$sw[$j] = "Замкнут"
+						Else
+							$sw[$j] = "Разомкнут"
+						EndIf
+					Next
+					MsgBox(0, "", "Состояние контакта №1: " & $sw[2] & @CRLF & _
+							"Состояние контакта №2: " & $sw[3] & @CRLF & _
+							"Состояние контакта №3: " & $sw[4] & @CRLF & _
+							"Состояние контакта №4: " & $sw[5] & @CRLF & _
+							"Состояние контакта №5: " & $sw[6] & @CRLF & _
+							"Состояние контакта №6: " & $sw[7])
+				Case $cmd[1] = "TEMP"
+					$temp = (Asc($rxchr[1]) + Asc($rxchr[2])) / 2
+					;MsgBox(0,"",$temp)
+					$result = $temp
+				Case $cmd[1] = "TIME"
+					$time = Hex(Asc($rxchr[1]), 2) & "-" & Hex(Asc($rxchr[2]), 2) & " " & Hex(Asc($rxchr[3]), 2) & ":" & Hex(Asc($rxchr[4]), 2) & ":" & Hex(Asc($rxchr[5]), 2)
+					MsgBox(0, "", $time)
+				Case $cmd[1] = "TP"
+					$tp = Asc($rx)
+					;MsgBox(0,"",$tp)
+					$result = $tp
+				Case $cmd[1] = "TSM"
+					$tsm = ""
+					For $i = 1 To Asc($rxchr[1])
+						$tsm = $tsm & Asc($rxchr[$i + 1])
+					Next
+					MsgBox(0, "", $tsm)
+			EndSelect
+		Else
+			MsgBox(0, "", "Ошибка CRC")
+		EndIf
+	Else
+		;MsgBox(0,"","Данные без CRC")
+		Select
+			Case $cmd[1] = "DS1820 ERROR"
+				MsgBox(0, "", $cmd[1])
+			Case $cmd[1] = "END" & Chr(0x0D) & Chr(0x0A)
+				MsgBox(0, "", "Конец сеанса")
+			Case $cmd[1] = "OK"
+				MsgBox(0, "", $cmd[1])
+			Case $cmd[1] = "REMOTE" & Chr(0x0D) & Chr(0x0A)
+				;MsgBox(0,"","REMOTE")
+				$result = "N/A"
+		EndSelect
+	EndIf
+	Return $result
+EndFunc   ;==>comData
+
+;****************************************
+;********** CommMG.au3 V2.1 my **********
+;****************************************
+
+Func _CommSetPort($iPort, ByRef $sErr, $iBaud = 19200, $iBits = 8, $iPar = 0, $iStop = 1, $iFlow = 0)
+	Local $vDllAns
+	$sMGBuffer = ""
+	$sErr = ""
+	If Not $fPortOpen Then
+		$hDll = DllOpen("commg.dll")
+		If $hDll = -1 Then
+			SetError(2)
+			$sErr = "Ошибка при открытии commg.dll"
+			Return 0
+		EndIf
+		$fPortOpen = True
+	EndIf
+	ConsoleWrite("Последовательный порт (COM" & $iPort & ")" & @CRLF _
+			 & "Скорость (бит/с): " & $iBaud & @CRLF _
+			 & "Биты данных: " & $iBits & @CRLF _
+			 & "Четность: " & $iPar & @CRLF _
+			 & "Стоповые биты: " & $iStop & @CRLF _
+			 & "Управление потоком: " & $iFlow & @CRLF)
+	$vDllAns = DllCall($hDll, "int", "SetPort", "int", $iPort, "int", $iBaud, "int", $iBits, "int", $iPar, "int", $iStop, "int", $iFlow)
+	If @error <> 0 Then
+		$sErr = "Невозможно настроить пераметры порта"
+		SetError(1)
+		Return 0
+	EndIf
+	If $vDllAns[0] < 0 Then
+		SetError($vDllAns[0])
+		Switch $vDllAns[0]
+			Case -1
+				$sErr = "Неверно задана скорость порта"
+			Case -2
+				$sErr = "Неверно заданы параметры порта"
+			Case -4
+				$sErr = "Undefined data size"
+			Case -8
+				$sErr = "Port 0 not allowed"
+			Case -16
+				$sErr = "Порт не существует"
+			Case -32
+				$sErr = "Доступ запрещен, возможно порт уже используется"
+			Case -64
+				$sErr = "Unknown error accessing port"
+		EndSwitch
+		Return 0
+	Else
+		Return 1
+	EndIf
+EndFunc   ;==>_CommSetPort
+
+Func _CommClosePort()
+	DllCall($hDll, "int", "CloseDown")
+	DllClose($hDll)
+	$fPortOpen = False
+EndFunc   ;==>_CommClosePort
+
+Func _CommSendString($sMGString, $iWaitComplete = 0)
+	Local $vDllAns
+	$vDllAns = DllCall($hDll, "int", "SendString", "str", $sMGString, "int", $iWaitComplete)
+	If @error <> 0 Then
+		SetError(@error)
+		Return ""
+	Else
+		Return $vDllAns[0]
+	EndIf
+EndFunc   ;==>_CommSendString
+
+Func _CommGetString()
+	Local $vDllAns
+	$vDllAns = DllCall($hDll, "str", "GetString")
+	If @error <> 0 Then
+		SetError(1)
+		Return ""
+	EndIf
+	Return $vDllAns[0]
+EndFunc   ;==>_CommGetString
+
+Func _CommReadByte($wait = 0)
+	Local $iCount, $vDllAns
+	If Not $wait Then
+		$iCount = _CommGetInputCount()
+		If $iCount = 0 Then
+			SetError(1)
+			Return ""
+		EndIf
+	EndIf
+	$vDllAns = DllCall($hDll, "str", "GetByte")
+	If @error <> 0 Then
+		SetError(2)
+		Return ""
+	EndIf
+	Return $vDllAns[0]
+EndFunc   ;==>_CommReadByte
+
+Func _CommGetInputCount()
+	Local $vDllAns
+	$vDllAns = DllCall($hDll, "str", "GetInputCount")
+	If @error <> 0 Then
+		SetError(1)
+		Return 0
+	Else
+		Return $vDllAns[0]
+	EndIf
+EndFunc   ;==>_CommGetInputCount
