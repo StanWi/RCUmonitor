@@ -1,4 +1,4 @@
 img/*.ico
 *.dll
 *.exe
-secret.au3
+secret.*
