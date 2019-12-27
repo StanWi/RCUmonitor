@@ -1,25 +1,29 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
-#AutoIt3Wrapper_icon=img\rcumonitor.ico
-#AutoIt3Wrapper_outfile=rcumonitor.exe
-#AutoIt3Wrapper_UseUpx=n
+#AutoIt3Wrapper_Icon=img\rcumonitor.ico
+#AutoIt3Wrapper_Outfile=rcumonitor.exe
+#AutoIt3Wrapper_Compression=0
+#AutoIt3Wrapper_UseX64=n
 #AutoIt3Wrapper_Res_Comment=for support mail to:
 #AutoIt3Wrapper_Res_Description=Microtech RCU-1 (Ethernet)
-#AutoIt3Wrapper_Res_Fileversion=0.0.0.19
+#AutoIt3Wrapper_Res_Fileversion=0.0.0.21
 #AutoIt3Wrapper_Res_LegalCopyright=
-#AutoIt3Wrapper_Run_After=ResHacker.exe -delete %out%, %out%, DIALOG, 1000,
-#AutoIt3Wrapper_Run_After=ResHacker.exe -delete %out%, %out%, MENU, 166,
-#AutoIt3Wrapper_Run_After=upx.exe --best --compress-resources=0 "%out%"
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
+;#AutoIt3Wrapper_Res_Comment=for support mail to:
+;#AutoIt3Wrapper_Res_Description=Microtech RCU-1 (Ethernet)
+;#AutoIt3Wrapper_Res_Fileversion=0.0.0.21
+;#AutoIt3Wrapper_Res_LegalCopyright=
+#cs
+#ce
 
-$licYear = 2009
-$licMon = 12
-$licDay = 31
+$licYear = 2021
+$licMon = 01
+$licDay = 01
 If @YEAR >= $licYear Then
-	If @MON >= $licMon Then
-		If @MDAY > $licDay Then
-			Exit
-		EndIf
-	EndIf
+	;If @MON >= $licMon Then
+	;If @MDAY > $licDay Then
+	Exit
+	;EndIf
+	;EndIf
 EndIf
 
 #include <Array.au3>
@@ -60,6 +64,8 @@ For $i = 0 To $COM[0] - 1
 		$lste[$i][$j] = IniRead($fileNetwork, $COM[$i + 1], "lste" & $j, "")
 	Next
 Next
+
+Global $delay = Abs(Number(IniRead($fileOptions, 'main', 'delay', 2000))) ;Замедление опроса 160816. При ошибках CRC
 
 While 1
 	If ProcessExists("rcu.exe") Then
@@ -265,6 +271,7 @@ Func comSend($tx)
 	Next
 	$crc = $tx & Chr($dec)
 	_CommSendString($crc, 0)
+	Sleep($delay) ;Замедление опроса 160816. При ошибках CRC
 EndFunc   ;==>comSend
 
 Func comGet($i)
@@ -300,7 +307,7 @@ EndFunc   ;==>comGetByte
 
 Func comData($hexData)
 	$result = "Error"
-	$strData = _HexToString($hexData)
+	$strData = _HexToStringRCU($hexData)
 	$cmd = StringSplit($strData, "=")
 	If $cmd[0] = 3 Then $cmd[2] = $cmd[2] & "="
 	If $cmd[0] = 4 Then $cmd[2] = $cmd[2] & $cmd[3]
@@ -310,9 +317,9 @@ Func comData($hexData)
 		For $i = 1 To $chr[0]
 			$dec[$i - 1] = Asc($chr[$i])
 			For $j = 7 To 0 Step -1
-				If $dec[$i - 1] - 2 ^ $j + 1 > 0 Then
+				If $dec[$i - 1] >= 2 ^ $j Then
 					$bin[$i - 1][$j] = 1
-					$dec[$i - 1] = $dec[$i - 1] - 2 ^ $j
+					$dec[$i - 1] -= 2 ^ $j
 				Else
 					$bin[$i - 1][$j] = 0
 				EndIf
@@ -355,7 +362,7 @@ Func comData($hexData)
 		Next
 		$crc = 0
 		For $i = 7 To 0 Step -1
-			$crc = $crc + $reg[$i] * 2 ^ $i
+			$crc += $reg[$i] * 2 ^ $i
 		Next
 		If $crc = 0 Then
 			;MsgBox(0,"","Правильно")
@@ -609,3 +616,13 @@ Func _CommGetInputCount()
 		Return $vDllAns[0]
 	EndIf
 EndFunc   ;==>_CommGetInputCount
+
+; #FUNCTION# ====================================================================================================================
+; Author ........:
+; Modified.......:  - (Re-write using BinaryToString for speed)
+; Modified.......:  - (ANSI)
+; ===============================================================================================================================
+Func _HexToStringRCU($sHex)
+	If Not (StringLeft($sHex, 2) == "0x") Then $sHex = "0x" & $sHex
+	Return BinaryToString($sHex) ;, $SB_UTF8)
+EndFunc   ;==>_HexToStringRCU

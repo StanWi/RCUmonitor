@@ -1,32 +1,26 @@
 #NoTrayIcon
-
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
-#AutoIt3Wrapper_icon=img\rcu.ico
-#AutoIt3Wrapper_outfile=rcu.exe
-#AutoIt3Wrapper_UseUpx=n
+#AutoIt3Wrapper_Icon=img\rcu.ico
+#AutoIt3Wrapper_Outfile=rcu.exe
+#AutoIt3Wrapper_Compression=1
+#AutoIt3Wrapper_UseX64=n
 #AutoIt3Wrapper_Res_Comment=for support mail to:
 #AutoIt3Wrapper_Res_Description=Microtech RCU-1 (Ethernet)
-#AutoIt3Wrapper_Res_Fileversion=0.0.0.19
+#AutoIt3Wrapper_Res_Fileversion=0.0.0.21
 #AutoIt3Wrapper_Res_LegalCopyright=
-#AutoIt3Wrapper_Run_After=ResHacker.exe -delete %out%, %out%, DIALOG, 1000,
-#AutoIt3Wrapper_Run_After=ResHacker.exe -delete %out%, %out%, MENU, 166,
-#AutoIt3Wrapper_Run_After=ResHacker.exe -add %out%, %out%, img\logo.bmp, bitmap, LOGO_BMP, 0
-#AutoIt3Wrapper_Run_After=ResHacker.exe -add %out%, %out%, img\critical.bmp, bitmap, CRITICAL_BMP, 0
-#AutoIt3Wrapper_Run_After=ResHacker.exe -add %out%, %out%, img\minor.bmp, bitmap, MINOR_BMP, 0
-#AutoIt3Wrapper_Run_After=ResHacker.exe -add %out%, %out%, img\normal.bmp, bitmap, NORMAL_BMP, 0
-#AutoIt3Wrapper_Run_After=ResHacker.exe -add %out%, %out%, img\disable.bmp, bitmap, DISABLE_BMP, 0
-#AutoIt3Wrapper_Run_After=upx.exe --best --compress-resources=0 "%out%"
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
+#cs
+#ce
 
-$licYear = 2009
-$licMon = 12
-$licDay = 31
+$licYear = 2021
+$licMon = 01
+$licDay = 01
 If @YEAR >= $licYear Then
-	If @MON >= $licMon Then
-		If @MDAY > $licDay Then
-			Exit
-		EndIf
-	EndIf
+	;If @MON >= $licMon Then
+	;If @MDAY > $licDay Then
+	Exit
+	;EndIf
+	;EndIf
 EndIf
 
 #include <GUIConstantsEx.au3>
@@ -40,16 +34,16 @@ EndIf
 #include <string.au3>
 
 ;=====External Files=====
-$fileOptions = @ScriptDir & "/options.ini"
-$fileNetwork = @ScriptDir & "/network.ini"
-$fileEvents = @ScriptDir & "/events.log"
-$fileIcon = @ScriptDir & "/img/rcu.ico"
-$fileMapPic = @ScriptDir & "/map.bmp"
-$fileMapIconNormal = @ScriptDir & "/img/normal.bmp"
-$fileMapIconMinor = @ScriptDir & "/img/minor.bmp"
-$fileMapIconCritical = @ScriptDir & "/img/critical.bmp"
-$fileMapIconDisable = @ScriptDir & "/img/disable.bmp"
-$fileAboutLogo = @ScriptDir & "/img/logo.bmp"
+$fileOptions = @ScriptDir & "\options.ini"
+$fileNetwork = @ScriptDir & "\network.ini"
+$fileEvents = @ScriptDir & "\events.log"
+$fileIcon = @ScriptDir & "\img\rcu.ico"
+$fileMapPic = @ScriptDir & "\map.bmp"
+$fileMapIconNormal = @ScriptDir & "\img\normal.bmp"
+$fileMapIconMinor = @ScriptDir & "\img\minor.bmp"
+$fileMapIconCritical = @ScriptDir & "\img\critical.bmp"
+$fileMapIconDisable = @ScriptDir & "\img\disable.bmp"
+$fileAboutLogo = @ScriptDir & "\img\logo.bmp"
 ;========================
 
 ;=====Start=====
@@ -95,6 +89,7 @@ Global $uniGroup, $uniInfo, $uniInfoIDlable, $uniInfoID, $uniInfoSNlable, $uniIn
 Global $statusBarAlarm
 Global $port
 Global $lineList, $nList
+Global $delay = Abs(Number(IniRead($fileOptions, 'main', 'delay', 2000))) ;Замедление опроса 160816. При ошибках CRC
 
 ;=====Constants=====
 $dwinw = 8    ;погрешность определения ширины окна ($win[2] - $dwinw)
@@ -141,7 +136,7 @@ $win[2] = IniRead($fileOptions, "main", "winw", 600)
 $win[3] = IniRead($fileOptions, "main", "winh", 600)
 $win[0] = IniRead($fileOptions, "main", "winx", Round((@DesktopWidth - $win[2]) / 2))
 $win[1] = IniRead($fileOptions, "main", "winy", Round((@DesktopHeight - $win[3]) / 2))
-$winz = DECtoBIN(IniRead($fileOptions, "main", "winz", 7), 4)
+$winz = DECtoBIN(Number(IniRead($fileOptions, "main", "winz", 7)), 4)
 If $win[2] > @DesktopWidth Then $win[2] = @DesktopWidth
 If $win[3] > @DesktopHeight Then $win[3] = @DesktopHeight
 If $win[0] < 0 Then $win[0] = 0
@@ -184,6 +179,7 @@ $menuServiceMonitoring = GUICtrlCreateMenuItem("&Мониторинг", $menuSer
 $menuServicePing = GUICtrlCreateMenuItem("&Пинг...", $menuService)
 $menuServiceRefreshAll = GUICtrlCreateMenuItem("Обновить всю &сеть", $menuService)
 $menuServiceRefreshData = GUICtrlCreateMenuItem("Обновить данные всех &УУ", $menuService)
+GUICtrlCreateMenuItem("Задержка опроса " & Round($delay / 1000, 3) & " c", $menuService)
 $menuHelp = GUICtrlCreateMenu("&Справка")
 $menuHelpAbout = GUICtrlCreateMenuItem("&О программе", $menuHelp)
 $menuLine = GUICtrlCreateLabel("", 0, 0, ($win[2] - $dwinw), 2, $SS_SUNKEN)
@@ -745,6 +741,7 @@ Func rcuRefresh($i)            ;Refresh RCU
 	$portState = comConnect($i)
 	If $portState <> 0 Then
 		comSend("ID? ")
+		Sleep(1000)
 		$getState = comGet($i)
 		If $getState <> "" Then
 			GUICtrlSetData($rcuProgress, 0)
@@ -770,8 +767,10 @@ Func rcuRefresh($i)            ;Refresh RCU
 			$tpuu = comGetByte()
 			GUICtrlSetData($rcuProgress, 80)
 			comSend("END ")
+			Sleep(1000) ;добавлено 160816. Медленный ответ Заларей.
 			comGet($i)
 			comSend("END ")
+			Sleep(1000) ;добавлено 160816. Медленный ответ Заларей.
 			comGet($i)
 			comDisConnect()
 			GUICtrlSetData($rcuProgress, 90)
@@ -904,8 +903,8 @@ Func menuHelpAbout()         ;Меню -> Справка -> О программ�
 	GUICtrlCreatePic($fileAboutLogo, 0, 0, 413, 77)
 	GUICtrlCreateIcon($fileIcon, -1, 11, 90)
 	GUICtrlCreateLabel($programmName, 52, 89, 133, 15)
-	GUICtrlCreateLabel("Версия 0.0.0.19", 52, 106, 93, 15)
-	GUICtrlCreateLabel("ООО , 2009", 52, 122, 176, 15)
+	GUICtrlCreateLabel("Версия 0.0.0.21", 52, 106, 93, 15)
+	GUICtrlCreateLabel("ООО , 2008-2016", 52, 122, 176, 15)
 	GUICtrlCreateLabel("mail-to: ", 52, 138, 126, 15)
 	GUICtrlSetColor(-1, 0x0000FF)
 	GUICtrlSetCursor(-1, 0)
@@ -957,8 +956,9 @@ Func setTree()
 		For $j = 1 To 31
 			$territoryUni[$i][$j] = -1
 			If $unit[$i][$j] <> "" Then
-				$unitName = _HexToString($unit[$i][$j])
+				$unitName = _HexToStringRCU($unit[$i][$j])
 				$unitName = StringSplit($unitName, " ")
+				;_ArrayDisplay($unitName,'$unitName')
 				If $unitName[1] <> "" Then $unitName[1] = StringTrimLeft($unitName[1], 2)
 				$unitName[1] = StringReplace($unitName[1], Chr(22), "_")
 				$territoryUni[$i][$j] = GUICtrlCreateTreeViewItem($unitName[1], $territory[$i])
@@ -1107,7 +1107,7 @@ Func posUni($dy)                    ;x						y			w			h
 EndFunc   ;==>posUni
 Func setUni($i, $j)
 	GUICtrlSetData($uniGroup, $name[$i] & " (" & $COM[$i + 1] & ", адрес " & Dec(StringMid($addr[$i][$j], 5, 2)) & ")")
-	$unitName = _HexToString($unit[$i][$j])
+	$unitName = _HexToStringRCU($unit[$i][$j])
 	$unitName = StringSplit($unitName, " ")
 	If $unitName[1] <> "" Then $unitName[1] = StringTrimLeft($unitName[1], 2)
 	$unitName[1] = StringReplace($unitName[1], Chr(22), "_")
@@ -1150,7 +1150,8 @@ Func setUni($i, $j)
 	_GUICtrlListView_DeleteAllItems($uniList)
 	If $auto[$i] <> 0 Then
 		Dim $channel[1]
-		$uniListData = _HexToString($unit[$i][$j])
+		$uniListData = _HexToStringRCU($unit[$i][$j])
+		;ConsoleWrite($uniListData & @CRLF)
 		$uniListData = StringSplit($uniListData, " ")
 		$z = 1
 		For $k = 2 To $uniListData[0] - 1
@@ -1175,6 +1176,7 @@ Func setUni($i, $j)
 		Dim $ch2D[$uniListData[0] - 1][4]
 		$z = 1
 		For $k = 0 To $channel[0] - 1
+			ConsoleWrite($channel[$k + 1] & @CRLF)
 			$tmp = StringSplit($channel[$k + 1], "}-")
 			If StringInStr($tmp[1], "{") <> 0 Then
 				$tmp2 = StringSplit(StringTrimLeft($tmp[1], 1), " ")
@@ -1188,9 +1190,11 @@ Func setUni($i, $j)
 					$z = $z + 1
 				Next
 			Else
-				For $m = 0 To 3
-					$ch2D[$z][$m] = $tmp[$m]
-				Next
+				If $tmp[0] = 3 Then ;добавлено 160816: ошибка в получении порогов
+					For $m = 0 To 3
+						$ch2D[$z][$m] = $tmp[$m]
+					Next
+				EndIf
 				$z = $z + 1
 			EndIf
 		Next
@@ -1285,7 +1289,7 @@ Func limUni($i, $j, $n) ;Пределы
 		$z = 0
 		$unitLmts = StringTrimLeft($lmts[$i][$j], 4)
 		$unitLmts = StringTrimRight($unitLmts, 16)
-		$strlmts = StringSplit(_HexToString($unitLmts), " ")
+		$strlmts = StringSplit(_HexToStringRCU($unitLmts), " ")
 		For $k = 1 To $strlmts[0]
 			If $strlmts[$k] <> "" Then
 				$chrlmts = StringSplit($strlmts[$k], "")
@@ -1486,11 +1490,13 @@ EndFunc   ;==>timer
 
 Func close() ;сохранение размеров и позиции главного окна
 	$win = WinGetPos($programmName)
+	;_ArrayDisplay($win)
 	$winWH = 0
 	$winTB = 0
 	$winSB = 0
 	$winStyle = 0
-	If $win[2] = @DesktopWidth + $dwinw Then
+	;ConsoleWrite($win[2] & ' ' & @DesktopWidth + $dwinw & @CRLF)
+	If $win[2] >= @DesktopWidth + $dwinw Then
 		$winWH = 1
 	Else
 		IniWrite($fileOptions, "main", "winw", $win[2])
@@ -1512,10 +1518,11 @@ EndFunc   ;==>close
 
 Func DECtoBIN($number, $n) ;преобразование десятичного параметра в бинарный вид
 	Dim $result[$n]
+	Local $i
 	For $i = $n - 1 To 0 Step -1
-		If $number - 2 ^ $i >= 0 Then
-			$number = $number - 2 ^ $i
+		If $number >= 2 ^ $i Then
 			$result[$i] = 1
+			$number -= 2 ^ $i
 		Else
 			$result[$i] = 0
 		EndIf
@@ -1657,6 +1664,7 @@ Func comSend($tx)
 	Next
 	$crc = $tx & Chr($dec)
 	_CommSendString($crc, 0)
+	Sleep($delay) ;Замедление опроса 160816
 EndFunc   ;==>comSend
 
 Func comGet($i)
@@ -1691,32 +1699,49 @@ Func comGetByte()
 	Return $rx
 EndFunc   ;==>comGetByte
 
-Func comData($hexData)
-	$result = "Error"
-	$strData = _HexToString($hexData)
+Func comData($hexData) ;Извлечение данных из строки в шестнадцатиричной форме. Ред. 160812. Обновление компилятора.
+	Local $result = "Error"
+	Local $strData = _HexToStringRCU($hexData)
+	;ConsoleWrite('Строка на входе  "' & $hexData & '" версия ' & @AutoItVersion & @CRLF)
+	;ConsoleWrite('Строка как текст "' & $strData & '"' & @CRLF)
+	;ConsoleWrite('hex last symbol = ' & Asc(StringRight($strData,1)) & @CRLF)
 	$cmd = StringSplit($strData, "=")
+	;_ArrayDisplay($cmd,'Разделение текстовой строки знаком =')
 	If $cmd[0] = 3 Then $cmd[2] = $cmd[2] & "="
 	If $cmd[0] = 4 Then $cmd[2] = $cmd[2] & $cmd[3]
-	If @error = 0 Then
+	If $cmd[0] > 1 Then ;@error = 0
 		$chr = StringSplit($cmd[1] & "=" & StringRight($strData, 1) & Chr(0x00) & Chr(0x8C), "") ;00000000 & reverse polynom
+		;_ArrayDisplay($chr,'Массив символов')
+
 		Dim $dec[$chr[0]], $bin[$chr[0]][8]
 		For $i = 1 To $chr[0]
 			$dec[$i - 1] = Asc($chr[$i])
-			For $j = 7 To 0 Step -1
-				If $dec[$i - 1] - 2 ^ $j + 1 > 0 Then
+			;условие ниже добавлено 15.08.2016. Байт CRC в конце строки неправильно обрабатывается функцией Asc()
+			;If $i = $chr[0] - 2 Then
+			;	$dec[$i - 1] = Dec(StringRight($hexData,2))
+			;EndIf
+			;<===
+			;ConsoleWrite('Десятичное значение символа ' & $dec[$i - 1] & @CRLF)
+			For $j = 7 To 0 Step -1 ;ИСПРАВИТЬ
+				;ConsoleWrite('Шаг ' & $j & ': если ' &  $dec[$i - 1] & ' - ' & 2^$j & ' + 1 больше 0 (' & $dec[$i - 1] - 2^$j + 1 & ')' & @CRLF)
+				If $dec[$i - 1] >= 2 ^ $j Then ;If $dec[$i - 1] - 2^$j + 1 > 0 Then
+					;ConsoleWrite('True' & @CRLF)
 					$bin[$i - 1][$j] = 1
-					$dec[$i - 1] = $dec[$i - 1] - 2 ^ $j
+					$dec[$i - 1] -= 2 ^ $j ;$dec[$i - 1] = $dec[$i - 1] - 2^$j
 				Else
+					;ConsoleWrite('False' & @CRLF)
 					$bin[$i - 1][$j] = 0
 				EndIf
 			Next
 		Next
+		;_ArrayDisplay($bin,'Бинарное представление')
 		Dim $msg[1]
 		For $i = 1 To $chr[0] - 1
 			For $j = 0 To 7
 				_ArrayAdd($msg, $bin[$i - 1][$j])
 			Next
 		Next
+		;_ArrayDisplay($msg,'Сообщение')
 		Dim $reg[8], $regtmp[8]
 		For $i = 0 To 7
 			$reg[$i] = $msg[$i + 1]
@@ -1747,9 +1772,11 @@ Func comData($hexData)
 			EndIf
 		Next
 		$crc = 0
+		;_ArrayDisplay($reg,'Массив $reg')
 		For $i = 7 To 0 Step -1
-			$crc = $crc + $reg[$i] * 2 ^ $i
+			$crc += $reg[$i] * 2 ^ $i
 		Next
+		;ConsoleWrite('$crc = ' & $crc & @CRLF)
 		If $crc = 0 Then
 			;MsgBox(0,"","Правильно")
 			$rx = StringTrimRight($cmd[2], 1)
@@ -1876,7 +1903,7 @@ Func comData($hexData)
 					MsgBox(0, "", $tsm)
 			EndSelect
 		Else
-			MsgBox(0, "", "Ошибка CRC")
+			MsgBox(0, "Ошибка CRC", $hexData, 1)
 		EndIf
 	Else
 		;MsgBox(0,"","Данные без CRC")
@@ -2002,3 +2029,14 @@ Func _CommGetInputCount()
 		Return $vDllAns[0]
 	EndIf
 EndFunc   ;==>_CommGetInputCount
+
+
+; #FUNCTION# ====================================================================================================================
+; Author ........:
+; Modified.......:  - (Re-write using BinaryToString for speed)
+; Modified.......:  - (ANSI)
+; ===============================================================================================================================
+Func _HexToStringRCU($sHex)
+	If Not (StringLeft($sHex, 2) == "0x") Then $sHex = "0x" & $sHex
+	Return BinaryToString($sHex) ;, $SB_UTF8)
+EndFunc   ;==>_HexToStringRCU
