@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_Icon=img\rcu.ico
 #AutoIt3Wrapper_Outfile=rcu.exe
 #AutoIt3Wrapper_UseX64=n
-#AutoIt3Wrapper_Res_Comment=for support mail to 
+#AutoIt3Wrapper_Res_Comment=for support mail to
 #AutoIt3Wrapper_Res_Description=Microtech RCU-1 (Ethernet)
 #AutoIt3Wrapper_Res_Fileversion=0.0.1.0
 #AutoIt3Wrapper_Res_LegalCopyright=
@@ -284,16 +284,15 @@ GUICtrlSetResizing(-1, 804)
 stateUni($GUI_HIDE)
 GUICtrlSetData($loadPro, 80)
 ; ~~~~~List~~~~~
-$list = GUICtrlCreateListView("Время события|Время очистки|Узел|Блок|Параметр|Тип|Событие", 0, 38 + $dy + $maph, ($win[2] - $dwinw), ($win[3] - $dwinh) - $maph - 77 - $dy + $dh, $LVS_SORTDESCENDING)
+$list = GUICtrlCreateListView("Время события|Узел|Блок|Параметр|Тип|Событие", 0, 38 + $dy + $maph, ($win[2] - $dwinw), ($win[3] - $dwinh) - $maph - 77 - $dy + $dh, $LVS_SORTDESCENDING)
 GUICtrlSetResizing(-1, 102)
 _GUICtrlListView_SetExtendedListViewStyle($list, BitOR($LVS_EX_FULLROWSELECT, $LVS_EX_GRIDLINES, $LVS_EX_DOUBLEBUFFER))
 _GUICtrlListView_SetColumnWidth($list, 0, 120)
-_GUICtrlListView_SetColumnWidth($list, 1, 120)
-_GUICtrlListView_SetColumnWidth($list, 2, 100)
+_GUICtrlListView_SetColumnWidth($list, 1, 100)
+_GUICtrlListView_SetColumnWidth($list, 2, 120)
 _GUICtrlListView_SetColumnWidth($list, 3, 100)
-_GUICtrlListView_SetColumnWidth($list, 4, 100)
-_GUICtrlListView_SetColumnWidth($list, 5, 150)
-_GUICtrlListView_SetColumnWidth($list, 6, 300)
+_GUICtrlListView_SetColumnWidth($list, 4, 150)
+_GUICtrlListView_SetColumnWidth($list, 5, 300)
 GUICtrlSetData($loadLab, "Загрузка списка аварий...")
 
 load_event_log()
@@ -313,14 +312,12 @@ GUICtrlSetResizing(-1, 772)
 If $winz[2] = 0 Then stateStatusBar($GUI_HIDE)
 
 ;=====Обновление Списка аварий===== + Индикация
-;~ $dateEvents = FileGetTime($fileEvents) ;время последнего изменения Списка аварий
-;~ $dateNetwork = FileGetTime($fileNetwork) ;время последнего изменения Данных о сети
-Dim $alarm_rcu[$COM[0]][20]
-For $i = 0 To $COM[0] - 1
-	For $j = 0 To 19
-		$alarm_rcu[$i][$j] = 0
-	Next
-Next
+;~ Dim $alarm_rcu[$COM[0]][20]
+;~ For $i = 0 To $COM[0] - 1
+;~ 	For $j = 0 To 19
+;~ 		$alarm_rcu[$i][$j] = 0
+;~ 	Next
+;~ Next
 $active_rcu = 0
 
 ;=====SetData=====
@@ -340,7 +337,6 @@ If $winz[0] = 1 Then GUISetState(@SW_MAXIMIZE)
 
 While 1
 	$msg = GUIGetMsg()
-;~ 	If $msg Then ConsoleWrite($msg & @CRLF)
 	$sec = @SEC
 	If Mod(@SEC, 10) = 0 Then
 		$SQL = "SELECT update_time FROM last_update WHERE last_update_id = 1;"
@@ -721,6 +717,7 @@ GUIDelete()
 Exit
 
 Func load_event_log()
+	Local $i, $j
 	$SQL = "SELECT log.event_time, ne.name, equipment.name, network.address, param.name, severity.name, log.event " & _
 			"FROM log, network, ne, equipment, param, severity " & _
 			"WHERE cleared = 0 " & _
@@ -732,9 +729,28 @@ Func load_event_log()
 			"ORDER BY log.log_id DESC LIMIT 100;"
 	$l = _EzMySql_GetTable2d($SQL)
 	_GUICtrlListView_DeleteAllItems($list)
+	For $i = 0 To $COM[0] - 1
+		If $auto[$i] = 1 Then
+			GUICtrlSetColor($territory[$i], 0x000000)
+			GUICtrlSetImage($mapIcon[$i], $fileMapIconNormal)
+			For $j = 1 To 31
+				GUICtrlSetColor($territoryUni[$i][$j], 0x000000)
+			Next
+		EndIf
+	Next
 	For $i = 1 To UBound($l) - 1
-		GUICtrlCreateListViewItem(StringFormat('%s||%s|%s (адрес %s)|%s|%s|%s', _
+		GUICtrlCreateListViewItem(StringFormat('%s|%s|%s (адрес %s)|%s|%s|%s', _
 				$l[$i][0], $l[$i][1], $l[$i][2], $l[$i][3], $l[$i][4], $l[$i][5], $l[$i][6]), $list)
+		$k = _ArraySearch($name, $l[$i][1])
+		If $l[$i][5] = 'Предупреждение' Then
+			GUICtrlSetColor($territory[$k], 0xFF8106)
+			GUICtrlSetColor($territoryUni[$k][$l[$i][3]], 0xFF8106)
+			GUICtrlSetImage($mapIcon[$k], $fileMapIconMinor)
+		ElseIf $l[$i][5] = 'Критическая ошибка' Then
+			GUICtrlSetColor($territory[$k], 0xFF0000)
+			GUICtrlSetColor($territoryUni[$k][$l[$i][3]], 0xFF0000)
+			GUICtrlSetImage($mapIcon[$k], $fileMapIconCritical)
+		EndIf
 	Next
 EndFunc   ;==>load_event_log
 
@@ -1347,6 +1363,7 @@ EndFunc   ;==>delTree
 ;~~~~~ Map ~~~~~
 
 Func map($dy)
+	Local $i
 	$mapLable = GUICtrlCreateLabel("", ($win[2] - $dwinw) - $mapw - 4, 32 + $dy, $mapw + 4, $maph + 4, $SS_SUNKEN)
 	GUICtrlSetResizing(-1, 804)
 	GUICtrlSetState(-1, $GUI_DISABLE)
@@ -1373,7 +1390,8 @@ Func stateMap($state)
 	Next
 EndFunc   ;==>stateMap
 
-Func posMap($dy) ; x								y			w			h
+Func posMap($dy)
+	Local $i
 	GUICtrlSetPos($mapLable, ($win[2] - $dwinw) - $mapw - 4, 32 + $dy, $mapw + 4, $maph + 4)
 	GUICtrlSetPos($mapPic, ($win[2] - $dwinw) - $mapw - 2, 34 + $dy, $mapw, $maph)
 	For $i = 0 To $COM[0] - 1
@@ -1382,6 +1400,7 @@ Func posMap($dy) ; x								y			w			h
 EndFunc   ;==>posMap
 
 Func delMap()
+	Local $i
 	For $i = 0 To $COM[0] - 1
 		GUICtrlDelete($mapIcon[$i])
 	Next
@@ -1389,19 +1408,20 @@ Func delMap()
 	GUICtrlDelete($mapLable)
 EndFunc   ;==>delMap
 
-Func setMapNormal($i) ; Установка зеленого индикатора
-	$k = 0
-	For $j = 0 To 19
-		If $alarm_rcu[$i][$j] = 1 Then
-			$k = 1
-			ExitLoop
-		EndIf
-	Next
-	If $k = 0 Then
-		GUICtrlSetColor($territory[$i], 0x000000)
-		GUICtrlSetImage($mapIcon[$i], $fileMapIconNormal)
-	EndIf
-EndFunc   ;==>setMapNormal
+;~ Func setMapNormal($i) ; Установка зеленого индикатора
+;~ 	Local $k, $j
+;~ 	$k = 0
+;~ 	For $j = 0 To 19
+;~ 		If $alarm_rcu[$i][$j] = 1 Then
+;~ 			$k = 1
+;~ 			ExitLoop
+;~ 		EndIf
+;~ 	Next
+;~ 	If $k = 0 Then
+;~ 		GUICtrlSetColor($territory[$i], 0x000000)
+;~ 		GUICtrlSetImage($mapIcon[$i], $fileMapIconNormal)
+;~ 	EndIf
+;~ EndFunc   ;==>setMapNormal
 
 ;~~~~~ RCU-1 ~~~~~
 
@@ -1945,7 +1965,7 @@ Func load()
 			EndIf
 		Next
 	Next
-;~ 	_ArrayDisplay($unit_name_list)
+;~ 	_ArrayDisplay($name)
 
 ;~ 	Dim $unit[$COM[0]][32]
 ;~ 	Dim $data[$COM[0]][32]
@@ -2304,12 +2324,7 @@ Func comData($hexData) ; Извлечение данных из строки в 
 	Return $result
 EndFunc   ;==>comData
 
-; #FUNCTION# ====================================================================================================================
-; Author ........: Jarvis Stubblefield
-; Modified.......: SmOke_N - (Re-write using BinaryToString for speed)
-; Modified.......: Stan Syrosenko - (ANSI)
-; ===============================================================================================================================
 Func _HexToStringRCU($sHex)
 	If Not (StringLeft($sHex, 2) == "0x") Then $sHex = "0x" & $sHex
-	Return BinaryToString($sHex);, $SB_UTF8)
+	Return BinaryToString($sHex) ;, $SB_UTF8)
 EndFunc   ;==>_HexToStringRCU
