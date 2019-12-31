@@ -325,7 +325,7 @@ $timer = TimerInit()
 GUICtrlSetData($statusBarState, "Готово")
 GUICtrlSetData($statusBarAlarm, $nList & " ")
 ;~ GUICtrlSetData($statusBarTimer, "0:00:00 ")
-alarm_log("Вход в систему " & @ComputerName)
+alarm_log("Вход в систему " & @UserName)
 
 GUISetState(@SW_HIDE, $loadWin)
 GUICtrlDelete($loadLab)
@@ -1288,7 +1288,7 @@ Func menuHelpAbout() ; Меню -> Справка -> О программе
 	GUICtrlCreateIcon($fileIcon, -1, 11, 90)
 	GUICtrlCreateLabel($programmName, 52, 89, 133, 15)
 	GUICtrlCreateLabel("Версия 0.0.1.0", 52, 106, 93, 15)
-	GUICtrlCreateLabel("ООО , 2008-2019", 52, 122, 176, 15)
+	GUICtrlCreateLabel($COMPANY & ", 2008-2019", 52, 122, 176, 15)
 	GUICtrlCreateLabel("", 52, 138, 126, 15)
 	GUICtrlSetColor(-1, 0x0000FF)
 	GUICtrlSetCursor(-1, 0)
@@ -1442,7 +1442,7 @@ Func stateRcu($state)
 	GUICtrlSetState($rcuAutoOff, $state)
 EndFunc   ;==>stateRcu
 
-Func posRcu($dy) ; x						y				w			h
+Func posRcu($dy)
 	GUICtrlSetPos($rcuGroup, $win[2] - $mapw - 12, 34 + $dy, $mapw + 4, $maph + 2)
 	;Информация о УУ
 	GUICtrlSetPos($rcuInfo, $win[2] - $mapw - 4, 50 + $dy, $mapw - 12, 80)
@@ -1513,7 +1513,7 @@ Func stateUni($state)
 	GUICtrlSetState($uniList, $state)
 EndFunc   ;==>stateUni
 
-Func posUni($dy) ; x						y			w			h
+Func posUni($dy)
 	GUICtrlSetPos($uniGroup, $win[2] - $mapw - 12, 34 + $dy, $mapw + 4, $maph + 2)
 	;Информация о устройстве
 	GUICtrlSetPos($uniInfo, $win[2] - $mapw - 4, 50 + $dy, $mapw - 12, 80)
@@ -1897,7 +1897,7 @@ Func close() ; сохранение размеров и позиции глав�
 	If BitAND(GUICtrlRead($menuViewStatusBar), $GUI_CHECKED) = $GUI_CHECKED Then $winSB = 4
 	If BitAND(GUICtrlRead($menuViewStyleWinXP), $GUI_CHECKED) = $GUI_CHECKED Then $winStyle = 8
 ;~ 	IniWrite($fileOptions, "main", "winz", $winWH + $winTB + $winSB + $winStyle)
-	alarm_log("Выход из системы " & @ComputerName)
+	alarm_log("Выход из системы " & @UserName)
 	If FileExists($file_monitor) Then
 		$SQL = "UPDATE main SET auto = 0 WHERE main_id = 1;"
 		_EzMySql_Exec($SQL)
